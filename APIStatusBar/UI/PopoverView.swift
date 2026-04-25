@@ -202,9 +202,9 @@ struct PopoverView: View {
                         .help(barTooltip(for: sample))
                 }
             }
-            .frame(width: geo.size.width, height: 32, alignment: .bottom)
+            .frame(width: geo.size.width, height: 22, alignment: .bottom)
         }
-        .frame(height: 32)
+        .frame(height: 22)
     }
 
     /// Categorical height: green tops out (healthy ceiling), yellow dips
@@ -213,10 +213,10 @@ struct PopoverView: View {
     /// glance from the chart's silhouette.
     private func barHeight(for sample: ProbePoller.Snapshot) -> CGFloat {
         switch sample.health {
-        case .healthy:  return 28
-        case .degraded: return 14
-        case .down:     return 5
-        case .unknown:  return 3
+        case .healthy:  return 18
+        case .degraded: return 9
+        case .down:     return 4
+        case .unknown:  return 2
         }
     }
 
