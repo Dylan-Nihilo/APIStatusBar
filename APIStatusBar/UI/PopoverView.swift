@@ -189,49 +189,55 @@ struct PopoverView: View {
             Text(probeStatusString(s))
                 .foregroundStyle(.secondary)
                 .monospacedDigit()
+        } else if probe.lastError != nil {
+            Text("Probe unavailable")
+                .foregroundStyle(.tertiary)
         } else {
-            Text("Checking…")
+            Text("Awaiting probe")
                 .foregroundStyle(.tertiary)
         }
     }
 
-    /// Single-line status summary so SwiftUI's truncation works cleanly
-    /// instead of an HStack of segments wrapping unpredictably.
+    /// Single-line status summary — channel · ping · uptime — composed once
+    /// so SwiftUI's truncation works cleanly instead of an HStack of segments
+    /// wrapping unpredictably.
     private func probeStatusString(_ s: ProbePoller.Snapshot) -> String {
-        var parts: [String] = []
-        if let channel = probe.primaryChannelName {
-            parts.append(channel)
-            parts.append(s.health == .down ? s.health.label : "\(s.latencyMS) ms")
-            if let up = probe.uptime24h {
-                parts.append(String(format: "%.1f%% 24h", up * 100))
-            }
-        } else {
-            // Mock fallback — no channel name, show the descriptive label.
-            if s.health == .down {
-                parts.append(s.health.label)
-            } else {
-                parts.append("\(s.health.label) · \(s.latencyMS) ms")
-            }
+        guard let channel = probe.primaryChannelName else {
+            return s.health.label
+        }
+        var parts: [String] = [channel]
+        parts.append(s.health == .down ? s.health.label : "\(s.latencyMS) ms")
+        if let up = probe.uptime24h {
+            parts.append(String(format: "%.1f%% 24h", up * 100))
         }
         return parts.joined(separator: " · ")
     }
 
     private var probeChart: some View {
         // 60 bars across ~280pt internal card width → ~3.6pt per bar with 1pt gap.
-        // Use GeometryReader so this scales if the popover width changes later.
+        // When history is empty (no service / awaiting first fetch), render
+        // a flat row of low-opacity gray placeholder bars instead of mocking.
         GeometryReader { geo in
             let samples = probe.history
-            let count = max(samples.count, 1)
+            let displayCount = max(samples.count, 60)
             let spacing: CGFloat = 1
-            let totalSpacing = spacing * CGFloat(count - 1)
-            let barWidth = max((geo.size.width - totalSpacing) / CGFloat(count), 2)
+            let totalSpacing = spacing * CGFloat(displayCount - 1)
+            let barWidth = max((geo.size.width - totalSpacing) / CGFloat(displayCount), 2)
             HStack(alignment: .bottom, spacing: spacing) {
-                ForEach(samples) { sample in
-                    RoundedRectangle(cornerRadius: 1.5)
-                        .fill(sample.health.color)
-                        .frame(width: barWidth,
-                               height: barHeight(for: sample))
-                        .help(barTooltip(for: sample))
+                if samples.isEmpty {
+                    ForEach(0..<60, id: \.self) { _ in
+                        RoundedRectangle(cornerRadius: 1.5)
+                            .fill(Color.gray.opacity(0.22))
+                            .frame(width: barWidth, height: 4)
+                    }
+                } else {
+                    ForEach(samples) { sample in
+                        RoundedRectangle(cornerRadius: 1.5)
+                            .fill(sample.health.color)
+                            .frame(width: barWidth,
+                                   height: barHeight(for: sample))
+                            .help(barTooltip(for: sample))
+                    }
                 }
             }
             .frame(width: geo.size.width, height: 22, alignment: .bottom)
