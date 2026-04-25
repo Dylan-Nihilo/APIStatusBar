@@ -32,6 +32,7 @@ struct APIStatusBarApp: App {
             SettingsView(settings: settings)
                 .onDisappear { rebuildPollerIfNeeded() }
         }
+        .windowResizability(.contentSize)
     }
 
     /// Recreate the poller's `NewAPIClient` whenever server URL / token / user ID changes.
