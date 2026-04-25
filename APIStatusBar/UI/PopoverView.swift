@@ -3,6 +3,7 @@ import SwiftUI
 struct PopoverView: View {
     @ObservedObject var poller: QuotaPoller
     @ObservedObject var modelStats: ModelStatsPoller
+    @ObservedObject var probe: ProbePoller
     @ObservedObject var settings: AppSettings
     let openSettings: () -> Void
 
@@ -20,6 +21,8 @@ struct PopoverView: View {
         }
         .frame(width: 320)
     }
+
+    // MARK: - Empty (first-run) state
 
     private var emptyBody: some View {
         VStack(spacing: 18) {
@@ -53,8 +56,6 @@ struct PopoverView: View {
         .padding(20)
     }
 
-    /// 4×3 grid of representative LLM provider icons. Decorative — communicates
-    /// "this app is for LLM gateways" without needing real /api/user/models data.
     private var providerGrid: some View {
         let providers = [
             "claude", "openai", "gemini", "deepseek",
@@ -79,32 +80,45 @@ struct PopoverView: View {
         }
     }
 
+    // MARK: - Configured state
+
     private var configuredBody: some View {
         VStack(alignment: .leading, spacing: 14) {
             balanceBlock
             statsBlock
+            topModelsStrip
             actionRow
         }
         .padding(16)
     }
 
     private var balanceBlock: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                Text("Remaining")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Spacer()
-                if poller.isRefreshing {
-                    ProgressView().controlSize(.mini)
+        HStack(alignment: .center, spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 6) {
+                    Text("Remaining")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    if poller.isRefreshing {
+                        ProgressView().controlSize(.mini)
+                    }
                 }
+                Text(balanceText)
+                    .font(.system(size: 32, weight: .semibold, design: .rounded))
+                    .monospacedDigit()
+                    .minimumScaleFactor(0.6)
+                    .lineLimit(1)
+                    .foregroundStyle(isLow ? Theme.warning : .primary)
             }
-            Text(balanceText)
-                .font(.system(size: 32, weight: .semibold, design: .rounded))
-                .monospacedDigit()
-                .minimumScaleFactor(0.6)
-                .lineLimit(1)
-                .foregroundStyle(isLow ? Theme.warning : .primary)
+            Spacer(minLength: 8)
+            if let asset = topProviderAsset {
+                Image(asset)
+                    .resizable()
+                    .renderingMode(.original)
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 44, height: 44)
+                    .help("Top model · \(asset.capitalized)")
+            }
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -112,32 +126,26 @@ struct PopoverView: View {
     }
 
     private var statsBlock: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            VStack(alignment: .leading, spacing: 8) {
-                statRow("Used", value: usedText)
-                statRow("Requests", value: requestText)
-                statRow("Last refresh", value: refreshedText)
-                if let error = poller.lastError {
-                    Label(String(describing: error), systemImage: "exclamationmark.triangle")
-                        .font(.caption)
-                        .foregroundStyle(Theme.warning)
-                        .lineLimit(2)
-                        .truncationMode(.tail)
-                }
+        VStack(alignment: .leading, spacing: 8) {
+            statRow("Used", value: usedText)
+            statRow("Requests", value: requestText)
+            statRow("Last refresh", value: refreshedText)
+            if let error = poller.lastError {
+                Label(String(describing: error), systemImage: "exclamationmark.triangle")
+                    .font(.caption)
+                    .foregroundStyle(Theme.warning)
+                    .lineLimit(2)
+                    .truncationMode(.tail)
             }
-            .font(.callout)
-            .frame(maxWidth: .infinity, alignment: .leading)
-
             Divider().opacity(0.4)
-
-            providerStrip
+            probeRow
         }
+        .font(.callout)
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 
-    /// Label-leading / value-trailing row that always spans the full container width.
     private func statRow(_ label: String, value: String) -> some View {
         HStack {
             Text(label).foregroundStyle(.secondary)
@@ -147,11 +155,34 @@ struct PopoverView: View {
         .frame(maxWidth: .infinity)
     }
 
-    /// Real top providers from the user's last-30d /api/data/self rollup,
-    /// sized by relative quota share. Largest provider gets a 22pt icon,
-    /// others scale down to 14pt min. Falls back to a placeholder line
-    /// when the fetch hasn't returned yet.
-    private var providerStrip: some View {
+    /// Live probe — currently mocked. Status dot + label on the left,
+    /// latency on the right.
+    private var probeRow: some View {
+        HStack(spacing: 8) {
+            Circle()
+                .fill(probe.snapshot?.health.color ?? .gray)
+                .frame(width: 8, height: 8)
+                .overlay(Circle().strokeBorder(.white.opacity(0.3), lineWidth: 0.5))
+            Text("Probe")
+                .foregroundStyle(.secondary)
+            Spacer(minLength: 12)
+            if let s = probe.snapshot {
+                if s.health == .down {
+                    Text(s.health.label).monospacedDigit()
+                } else {
+                    Text("\(s.health.label) · \(s.latencyMS) ms").monospacedDigit()
+                }
+            } else {
+                Text("Checking…")
+                    .foregroundStyle(.tertiary)
+            }
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    /// Standalone bare row of provider icons sized by usage share, sitting
+    /// between the stats card and the action footer.
+    private var topModelsStrip: some View {
         let top = Array(modelStats.topProviders.prefix(5))
         return HStack(alignment: .center, spacing: 8) {
             Text("Top models")
@@ -174,23 +205,21 @@ struct PopoverView: View {
             }
             Spacer(minLength: 0)
         }
+        .padding(.horizontal, 4)
         .frame(maxWidth: .infinity)
     }
 
-    /// 22pt for the biggest, scaled linearly down to 14pt for the smallest in
-    /// the top-N list. If only one provider, give it 18pt — no need to flex
-    /// when there's nothing to compare against.
     private func iconSize(for p: ProviderUsage, top: [ProviderUsage]) -> CGFloat {
         guard top.count > 1, let max = top.first?.quotaRaw, max > 0 else { return 18 }
         let ratio = CGFloat(p.quotaRaw) / CGFloat(max)
-        return 14 + ratio * 8 // 14...22
+        return 14 + ratio * 8
     }
 
     private var actionRow: some View {
         GlassEffectContainer(spacing: 8) {
             HStack(spacing: 8) {
                 Button {
-                    Task { await poller.refresh() }
+                    Task { await poller.refresh(); await modelStats.refresh(); await probe.refresh() }
                 } label: {
                     Image(systemName: "arrow.clockwise")
                 }
@@ -226,6 +255,12 @@ struct PopoverView: View {
             }
             .controlSize(.small)
         }
+    }
+
+    // MARK: - Computed
+
+    private var topProviderAsset: String? {
+        modelStats.topProviders.first?.providerAsset
     }
 
     private var balanceText: String {

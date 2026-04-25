@@ -5,6 +5,7 @@ struct APIStatusBarApp: App {
     @StateObject private var settings = AppSettings.shared
     @StateObject private var poller: QuotaPoller
     @StateObject private var modelStats: ModelStatsPoller
+    @StateObject private var probe = ProbePoller(intervalSeconds: 30)
 
     init() {
         let settings = AppSettings.shared
@@ -21,6 +22,7 @@ struct APIStatusBarApp: App {
         MenuBarExtra {
             PopoverHost(poller: poller,
                          modelStats: modelStats,
+                         probe: probe,
                          settings: settings,
                          rebuildPoller: rebuildPollerIfNeeded)
         } label: {
@@ -42,12 +44,12 @@ struct APIStatusBarApp: App {
         .windowResizability(.contentSize)
     }
 
-    /// Recreate both pollers' clients when server / token / user ID change.
     private func rebuildPollerIfNeeded() {
         let token = (try? KeychainStore.readAccessToken()) ?? ""
         guard let url = URL(string: settings.serverURL), url.host != nil, settings.isConfigured else {
             poller.stop()
             modelStats.stop()
+            probe.stop()
             return
         }
         let client = NewAPIClient(baseURL: url, accessToken: token, userID: settings.userID)
@@ -55,19 +57,21 @@ struct APIStatusBarApp: App {
         poller.start()
         modelStats.replaceClient(client)
         modelStats.start()
+        probe.start()
     }
 }
 
 private struct PopoverHost: View {
     @ObservedObject var poller: QuotaPoller
     @ObservedObject var modelStats: ModelStatsPoller
+    @ObservedObject var probe: ProbePoller
     @ObservedObject var settings: AppSettings
     let rebuildPoller: () -> Void
 
     @Environment(\.openSettings) private var openSettings
 
     var body: some View {
-        PopoverView(poller: poller, modelStats: modelStats, settings: settings) {
+        PopoverView(poller: poller, modelStats: modelStats, probe: probe, settings: settings) {
             NSApp.activate(ignoringOtherApps: true)
             openSettings()
         }
@@ -79,6 +83,9 @@ private struct PopoverHost: View {
                 }
                 if modelStats.topProviders.isEmpty {
                     Task { await modelStats.refresh() }
+                }
+                if probe.snapshot == nil {
+                    Task { await probe.refresh() }
                 }
             }
         }
