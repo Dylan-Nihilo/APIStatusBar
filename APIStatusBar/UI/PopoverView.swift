@@ -207,12 +207,17 @@ struct PopoverView: View {
         .frame(height: 32)
     }
 
-    /// Map latency (0–500ms) → height (3–32pt). Down samples get a min-height
-    /// red sliver so they're still visible — zero-height bars would disappear.
+    /// Categorical height: green tops out (healthy ceiling), yellow dips
+    /// halfway (unstable), red collapses to a stub (down). Latency stays in
+    /// the tooltip — the bar's job here is "is the service OK?", read at a
+    /// glance from the chart's silhouette.
     private func barHeight(for sample: ProbePoller.Snapshot) -> CGFloat {
-        if sample.health == .down { return 4 }
-        let clamped = min(max(sample.latencyMS, 0), 500)
-        return 6 + CGFloat(clamped) / 500.0 * 26
+        switch sample.health {
+        case .healthy:  return 28
+        case .degraded: return 14
+        case .down:     return 5
+        case .unknown:  return 3
+        }
     }
 
     private func barTooltip(for sample: ProbePoller.Snapshot) -> String {
