@@ -49,6 +49,7 @@ struct APIStatusBarApp: App {
         guard let url = URL(string: settings.serverURL), url.host != nil, settings.isConfigured else {
             poller.stop()
             modelStats.stop()
+            probe.replaceClient(nil)
             probe.stop()
             return
         }
@@ -57,6 +58,8 @@ struct APIStatusBarApp: App {
         poller.start()
         modelStats.replaceClient(client)
         modelStats.start()
+        // Probe uses the same baseURL but no auth — public status feed.
+        probe.replaceClient(KaizoStatusClient(baseURL: url))
         probe.start()
     }
 }

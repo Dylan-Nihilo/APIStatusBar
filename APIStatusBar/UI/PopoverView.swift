@@ -168,20 +168,45 @@ struct PopoverView: View {
                 Text("Probe")
                     .foregroundStyle(.secondary)
                 Spacer(minLength: 12)
-                if let s = probe.snapshot {
-                    if s.health == .down {
-                        Text(s.health.label).monospacedDigit()
-                    } else {
-                        Text("\(s.health.label) · \(s.latencyMS) ms").monospacedDigit()
-                    }
-                } else {
-                    Text("Checking…").foregroundStyle(.tertiary)
-                }
+                probeStatusText
             }
 
             probeChart
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    @ViewBuilder
+    private var probeStatusText: some View {
+        if let s = probe.snapshot {
+            // Real source: show "channel · ping · uptime%"
+            if let channel = probe.primaryChannelName {
+                HStack(spacing: 6) {
+                    Text(channel).foregroundStyle(.secondary)
+                    Text("·").foregroundStyle(.tertiary)
+                    if s.health == .down {
+                        Text(s.health.label)
+                    } else {
+                        Text("\(s.latencyMS) ms").monospacedDigit()
+                    }
+                    if let up = probe.uptime24h {
+                        Text("·").foregroundStyle(.tertiary)
+                        Text(String(format: "%.1f%% 24h", up * 100))
+                            .foregroundStyle(.tertiary)
+                            .monospacedDigit()
+                    }
+                }
+            } else {
+                // Mock fallback
+                if s.health == .down {
+                    Text(s.health.label).monospacedDigit()
+                } else {
+                    Text("\(s.health.label) · \(s.latencyMS) ms").monospacedDigit()
+                }
+            }
+        } else {
+            Text("Checking…").foregroundStyle(.tertiary)
+        }
     }
 
     private var probeChart: some View {
