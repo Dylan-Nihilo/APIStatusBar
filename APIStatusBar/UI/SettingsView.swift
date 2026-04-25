@@ -3,9 +3,10 @@ import SwiftUI
 struct SettingsView: View {
     @ObservedObject var settings: AppSettings
     @State private var accessToken: String = ""
-    @State private var savedMessage: String?
+    @State private var isTokenRevealed: Bool = false
     @State private var verification: Verification = .idle
     @State private var detection: Detection = .idle
+    @FocusState private var tokenFocused: Bool
 
     enum Verification: Equatable {
         case idle
@@ -29,12 +30,11 @@ struct SettingsView: View {
                         .textFieldStyle(.roundedBorder)
                         .autocorrectionDisabled()
                         .textContentType(.URL)
-                        .frame(minWidth: 260)
+                        .frame(minWidth: 240)
                 }
 
                 LabeledContent("Console") {
                     Button("Open in Browser…") { openInBrowser() }
-                        .buttonStyle(.bordered)
                         .disabled(URL(string: settings.serverURL)?.host == nil)
                 }
             }
@@ -42,15 +42,40 @@ struct SettingsView: View {
             Section {
                 LabeledContent("Access Token") {
                     HStack(spacing: 6) {
-                        SecureField("UUID from Personal Settings", text: $accessToken)
-                            .textFieldStyle(.roundedBorder)
-                            .frame(minWidth: 220)
+                        Group {
+                            if isTokenRevealed {
+                                TextField("paste UUID", text: $accessToken)
+                            } else {
+                                SecureField("paste UUID", text: $accessToken)
+                            }
+                        }
+                        .focused($tokenFocused)
+                        .textFieldStyle(.roundedBorder)
+                        .textContentType(.password)
+                        .autocorrectionDisabled()
+                        .frame(minWidth: 200)
+                        .onChange(of: accessToken) { _, newValue in
+                            try? KeychainStore.setAccessToken(newValue)
+                            verification = .idle
+                        }
+
                         Button {
-                            pasteFromClipboard()
+                            isTokenRevealed.toggle()
+                            tokenFocused = true
+                        } label: {
+                            Image(systemName: isTokenRevealed ? "eye.slash" : "eye")
+                        }
+                        .buttonStyle(.borderless)
+                        .help(isTokenRevealed ? "Hide token" : "Show token")
+
+                        Button {
+                            if let pasted = NSPasteboard.general.string(forType: .string) {
+                                accessToken = pasted.trimmingCharacters(in: .whitespacesAndNewlines)
+                            }
                         } label: {
                             Image(systemName: "doc.on.clipboard")
                         }
-                        .buttonStyle(.bordered)
+                        .buttonStyle(.borderless)
                         .help("Paste from clipboard")
                     }
                 }
@@ -63,21 +88,30 @@ struct SettingsView: View {
                             .multilineTextAlignment(.trailing)
                         Stepper("", value: $settings.userID, in: 0...10_000_000)
                             .labelsHidden()
-                        Button {
+                        Button("Auto-detect") {
                             Task { await autoDetectUserID() }
+                        }
+                        .disabled(accessToken.isEmpty || isScanning)
+                    }
+                }
+
+                LabeledContent("Connection") {
+                    HStack(spacing: 8) {
+                        Button {
+                            Task { await verifyConnection() }
                         } label: {
-                            switch detection {
-                            case .scanning(let n):
+                            if verification == .checking {
                                 HStack(spacing: 4) {
                                     ProgressView().controlSize(.mini)
-                                    Text("Scanning #\(n)…")
+                                    Text("Verifying…")
                                 }
-                            default:
-                                Text("Auto-detect")
+                            } else {
+                                Text("Verify Connection")
                             }
                         }
-                        .buttonStyle(.bordered)
-                        .disabled(accessToken.isEmpty || detection == .scanning(current: 0))
+                        .disabled(!canVerify)
+
+                        statusInline
                     }
                 }
             } header: {
@@ -104,80 +138,32 @@ struct SettingsView: View {
 
             Section("Polling") {
                 LabeledContent("Refresh interval") {
-                    Stepper("\(settings.refreshIntervalSeconds) seconds",
+                    Stepper("\(settings.refreshIntervalSeconds) s",
                             value: $settings.refreshIntervalSeconds,
-                            in: 15...3600,
-                            step: 15)
+                            in: 15...3600, step: 15)
                 }
                 LabeledContent("Low-balance threshold") {
                     Stepper("$\(settings.lowBalanceThresholdUSD, specifier: "%.0f")",
                             value: $settings.lowBalanceThresholdUSD,
-                            in: 0...1000,
-                            step: 1)
+                            in: 0...1000, step: 1)
                 }
             }
         }
         .formStyle(.grouped)
-        .frame(width: 560, height: 520)
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            footerBar
-        }
+        .frame(width: 500, height: 480)
+        .navigationTitle("APIStatusBar Settings")
         .onAppear {
             accessToken = (try? KeychainStore.readAccessToken()) ?? ""
         }
     }
 
-    // MARK: - Footer bar
-
-    private var footerBar: some View {
-        VStack(spacing: 0) {
-            Divider()
-            HStack(spacing: 12) {
-                statusLabel
-                Spacer()
-                Button {
-                    Task { await verifyConnection() }
-                } label: {
-                    if verification == .checking {
-                        HStack(spacing: 4) {
-                            ProgressView().controlSize(.mini)
-                            Text("Verifying…")
-                        }
-                    } else {
-                        Text("Verify Connection")
-                    }
-                }
-                .buttonStyle(.bordered)
-                .disabled(!canVerify)
-
-                Button("Save") { saveAll() }
-                    .buttonStyle(.borderedProminent)
-                    .tint(Theme.accent)
-                    .keyboardShortcut(.defaultAction)
-                    .disabled(!canSave)
-            }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 12)
-            .background(.bar)
-        }
-    }
-
     @ViewBuilder
-    private var statusLabel: some View {
+    private var statusInline: some View {
         switch verification {
-        case .idle:
-            if let msg = savedMessage {
-                Label(msg, systemImage: "checkmark.circle.fill")
-                    .foregroundStyle(Theme.accent)
-                    .font(.callout)
-            } else {
-                EmptyView()
-            }
-        case .checking:
+        case .idle, .checking:
             EmptyView()
         case .success(let usd):
-            Label(String(format: "Connected — $%.2f remaining", usd),
-                  systemImage: "checkmark.circle.fill")
+            Label(String(format: "$%.2f", usd), systemImage: "checkmark.circle.fill")
                 .foregroundStyle(Theme.accent)
                 .font(.callout)
         case .failure(let msg):
@@ -189,26 +175,17 @@ struct SettingsView: View {
         }
     }
 
-    // MARK: - Footer help text
-
     @ViewBuilder
     private var helpFooter: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Label("Access Token is a UUID from Personal Settings → System Access Token → Generate Token. It's not the same as an `sk-…` API key.",
+        VStack(alignment: .leading, spacing: 4) {
+            Label("Token is the UUID from Personal Settings → System Access Token → Generate Token. Not an `sk-…` API key.",
                   systemImage: "key.fill")
-            Label("Don't know your User ID? Tap **Auto-detect** to scan 1–50 with your token.",
+            Label("If User ID 1 fails to verify, tap **Auto-detect** to scan 1–50 with your token.",
                   systemImage: "person.crop.circle.badge.questionmark")
         }
         .font(.caption)
         .foregroundStyle(.secondary)
         .padding(.top, 4)
-    }
-
-    // MARK: - Computed
-
-    private var canSave: Bool {
-        let stored = (try? KeychainStore.readAccessToken()) ?? ""
-        return accessToken != stored || savedMessage == nil
     }
 
     private var canVerify: Bool {
@@ -217,36 +194,15 @@ struct SettingsView: View {
         return verification != .checking
     }
 
-    // MARK: - Actions
-
-    private func pasteFromClipboard() {
-        if let pasted = NSPasteboard.general.string(forType: .string) {
-            accessToken = pasted.trimmingCharacters(in: .whitespacesAndNewlines)
-            verification = .idle
-        }
+    private var isScanning: Bool {
+        if case .scanning = detection { return true }
+        return false
     }
 
     private func openInBrowser() {
-        guard var components = URLComponents(string: settings.serverURL) else { return }
-        if components.path.isEmpty || components.path == "/" {
-            components.path = "/console/personal"
-        }
-        if let url = components.url { NSWorkspace.shared.open(url) }
-    }
-
-    private func saveAll() {
-        do {
-            if accessToken.isEmpty {
-                try KeychainStore.deleteAccessToken()
-                savedMessage = "Token cleared"
-            } else {
-                try KeychainStore.setAccessToken(accessToken)
-                savedMessage = "Saved"
-            }
-        } catch {
-            savedMessage = nil
-            verification = .failure("Keychain error: \(error.localizedDescription)")
-        }
+        guard var c = URLComponents(string: settings.serverURL) else { return }
+        if c.path.isEmpty || c.path == "/" { c.path = "/console/personal" }
+        if let url = c.url { NSWorkspace.shared.open(url) }
     }
 
     private func verifyConnection() async {
@@ -260,22 +216,19 @@ struct SettingsView: View {
             let resp = try await client.getSelf()
             let usd = Double(resp.quota) / Double(settings.quotaPerUnit)
             verification = .success(remainingUSD: usd)
-            // Persist on success.
-            try? KeychainStore.setAccessToken(accessToken)
-            savedMessage = nil
         } catch let err as NewAPIError {
             switch err {
             case .httpStatus(401):
-                verification = .failure("HTTP 401 — User ID may not match this token. Try Auto-detect.")
+                verification = .failure("HTTP 401 — User ID may not match this token")
             case .httpStatus(let code):
-                verification = .failure("HTTP \(code) — check server URL and token")
+                verification = .failure("HTTP \(code)")
             case .apiFailure(let msg):
                 verification = .failure(msg)
             case .decoding:
-                verification = .failure("Unexpected response — is this really a new-api server?")
+                verification = .failure("Unexpected response")
             }
         } catch {
-            verification = .failure("Network: \(error.localizedDescription)")
+            verification = .failure(error.localizedDescription)
         }
     }
 
@@ -290,8 +243,6 @@ struct SettingsView: View {
                 _ = try await client.getSelf()
                 detection = .found(candidate)
                 settings.userID = candidate
-                verification = .success(remainingUSD: 0)
-                // Re-verify to populate the actual remaining balance.
                 await verifyConnection()
                 return
             } catch {
@@ -299,6 +250,6 @@ struct SettingsView: View {
             }
         }
         detection = .notFound
-        verification = .failure("Couldn't find a matching User ID in 1–50. Check /console/user in your admin panel.")
+        verification = .failure("No matching ID in 1–50. Check /console/user.")
     }
 }
