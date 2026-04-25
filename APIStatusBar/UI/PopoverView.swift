@@ -155,29 +155,74 @@ struct PopoverView: View {
         .frame(maxWidth: .infinity)
     }
 
-    /// Live probe — currently mocked. Status dot + label on the left,
-    /// latency on the right.
+    /// Live probe block: header row (status dot + label + current latency)
+    /// stacked above a 30-minute time-series bar chart. Bar height = latency,
+    /// color = health. Currently fed by mocked data.
     private var probeRow: some View {
-        HStack(spacing: 8) {
-            Circle()
-                .fill(probe.snapshot?.health.color ?? .gray)
-                .frame(width: 8, height: 8)
-                .overlay(Circle().strokeBorder(.white.opacity(0.3), lineWidth: 0.5))
-            Text("Probe")
-                .foregroundStyle(.secondary)
-            Spacer(minLength: 12)
-            if let s = probe.snapshot {
-                if s.health == .down {
-                    Text(s.health.label).monospacedDigit()
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                Circle()
+                    .fill(probe.snapshot?.health.color ?? .gray)
+                    .frame(width: 8, height: 8)
+                    .overlay(Circle().strokeBorder(.white.opacity(0.3), lineWidth: 0.5))
+                Text("Probe")
+                    .foregroundStyle(.secondary)
+                Spacer(minLength: 12)
+                if let s = probe.snapshot {
+                    if s.health == .down {
+                        Text(s.health.label).monospacedDigit()
+                    } else {
+                        Text("\(s.health.label) · \(s.latencyMS) ms").monospacedDigit()
+                    }
                 } else {
-                    Text("\(s.health.label) · \(s.latencyMS) ms").monospacedDigit()
+                    Text("Checking…").foregroundStyle(.tertiary)
                 }
-            } else {
-                Text("Checking…")
-                    .foregroundStyle(.tertiary)
             }
+
+            probeChart
         }
-        .frame(maxWidth: .infinity)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var probeChart: some View {
+        // 60 bars across ~280pt internal card width → ~3.6pt per bar with 1pt gap.
+        // Use GeometryReader so this scales if the popover width changes later.
+        GeometryReader { geo in
+            let samples = probe.history
+            let count = max(samples.count, 1)
+            let spacing: CGFloat = 1
+            let totalSpacing = spacing * CGFloat(count - 1)
+            let barWidth = max((geo.size.width - totalSpacing) / CGFloat(count), 2)
+            HStack(alignment: .bottom, spacing: spacing) {
+                ForEach(samples) { sample in
+                    RoundedRectangle(cornerRadius: 1.5)
+                        .fill(sample.health.color)
+                        .frame(width: barWidth,
+                               height: barHeight(for: sample))
+                        .help(barTooltip(for: sample))
+                }
+            }
+            .frame(width: geo.size.width, height: 32, alignment: .bottom)
+        }
+        .frame(height: 32)
+    }
+
+    /// Map latency (0–500ms) → height (3–32pt). Down samples get a min-height
+    /// red sliver so they're still visible — zero-height bars would disappear.
+    private func barHeight(for sample: ProbePoller.Snapshot) -> CGFloat {
+        if sample.health == .down { return 4 }
+        let clamped = min(max(sample.latencyMS, 0), 500)
+        return 6 + CGFloat(clamped) / 500.0 * 26
+    }
+
+    private func barTooltip(for sample: ProbePoller.Snapshot) -> String {
+        let f = RelativeDateTimeFormatter()
+        f.unitsStyle = .abbreviated
+        let when = f.localizedString(for: sample.timestamp, relativeTo: Date())
+        if sample.health == .down {
+            return "\(sample.health.label) · \(when)"
+        }
+        return "\(sample.latencyMS) ms · \(when)"
     }
 
     /// Standalone bare row of provider icons sized by usage share, sitting

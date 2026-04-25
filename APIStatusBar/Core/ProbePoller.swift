@@ -2,11 +2,10 @@ import Foundation
 import SwiftUI
 import Combine
 
-/// Periodic health probe of the gateway. v0.1 returns mocked data so the UI
-/// can be designed and verified end-to-end. M2 will swap `mockSnapshot()`
-/// for a real call (likely a tiny GET against `/api/status` or a synthetic
-/// chat completion against the cheapest model with a 5s timeout, measuring
-/// latency and asserting 200/success).
+/// Periodic health probe of the gateway. Maintains a rolling history so the
+/// popover can render a time-series bar chart. v0.1 produces mocked data —
+/// `mockSnapshot(at:)` will be swapped in M2 for a real GET against
+/// `/api/status` (or a synthetic chat completion) measuring latency and 200/ok.
 @MainActor
 final class ProbePoller: ObservableObject {
     enum Health: String, Equatable {
@@ -34,23 +33,36 @@ final class ProbePoller: ObservableObject {
         }
     }
 
-    struct Snapshot: Equatable {
+    struct Snapshot: Equatable, Identifiable {
+        let timestamp: Date
         let health: Health
         let latencyMS: Int
-        let timestamp: Date
+        var id: TimeInterval { timestamp.timeIntervalSince1970 }
     }
 
+    @Published private(set) var history: [Snapshot] = []
     @Published private(set) var snapshot: Snapshot?
 
+    let maxHistory: Int
     private let intervalSeconds: Int
     private var loop: Task<Void, Never>?
 
-    init(intervalSeconds: Int = 30) {
+    init(intervalSeconds: Int = 30, maxHistory: Int = 60) {
         self.intervalSeconds = intervalSeconds
+        self.maxHistory = maxHistory
+        // Pre-populate so the chart isn't empty on first popover open.
+        let seeded = generateMockHistory(count: maxHistory, intervalSeconds: intervalSeconds)
+        self.history = seeded
+        self.snapshot = seeded.last
     }
 
     func refresh() async {
-        snapshot = mockSnapshot()
+        let new = mockSnapshot(at: Date())
+        snapshot = new
+        history.append(new)
+        if history.count > maxHistory {
+            history.removeFirst(history.count - maxHistory)
+        }
     }
 
     func start() {
@@ -70,9 +82,11 @@ final class ProbePoller: ObservableObject {
         loop = nil
     }
 
-    /// 95% healthy / 4% degraded / 1% down. Latency normally clusters 80–180ms,
-    /// degraded shifts to 250–600ms, down → 0 (no response).
-    private func mockSnapshot() -> Snapshot {
+    // MARK: - Mock generation
+
+    /// 95% healthy / 4% degraded / 1% down. Latency clusters 80–180ms healthy,
+    /// 250–600ms degraded, 0 when down.
+    private func mockSnapshot(at timestamp: Date) -> Snapshot {
         let r = Int.random(in: 0..<100)
         let health: Health
         let latency: Int
@@ -87,6 +101,16 @@ final class ProbePoller: ObservableObject {
             health = .down
             latency = 0
         }
-        return Snapshot(health: health, latencyMS: latency, timestamp: Date())
+        return Snapshot(timestamp: timestamp, health: health, latencyMS: latency)
+    }
+
+    /// Walks backward from now, generating one sample per `intervalSeconds`.
+    private func generateMockHistory(count: Int, intervalSeconds: Int) -> [Snapshot] {
+        let now = Date()
+        return (0..<count).reversed().map { i in
+            let offset = TimeInterval(intervalSeconds * i)
+            let ts = now.addingTimeInterval(-offset)
+            return mockSnapshot(at: ts)
+        }
     }
 }
