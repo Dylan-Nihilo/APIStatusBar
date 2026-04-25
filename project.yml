@@ -27,8 +27,11 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.dylan.apistatusbar
         PRODUCT_NAME: APIStatusBar
-        CODE_SIGN_STYLE: Automatic
-        CODE_SIGN_IDENTITY: "Apple Development"
+        # Local dev: ad-hoc sign so Debug builds work without an Apple Developer team selected.
+        # Distribution (M3): override CODE_SIGN_IDENTITY / DEVELOPMENT_TEAM via xcconfig or
+        # GitHub Actions secrets to use the org's Developer ID Application certificate.
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_IDENTITY: "-"
         ENABLE_HARDENED_RUNTIME: YES
         COMBINE_HIDPI_IMAGES: YES
         SWIFT_STRICT_CONCURRENCY: complete
@@ -41,9 +44,12 @@ targets:
       - target: APIStatusBar
     settings:
       base:
+        GENERATE_INFOPLIST_FILE: YES
         BUNDLE_LOADER: $(TEST_HOST)
         TEST_HOST: $(BUILT_PRODUCTS_DIR)/APIStatusBar.app/Contents/MacOS/APIStatusBar
         SWIFT_VERSION: "6.0"
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_IDENTITY: "-"
 schemes:
   APIStatusBar:
     build:
