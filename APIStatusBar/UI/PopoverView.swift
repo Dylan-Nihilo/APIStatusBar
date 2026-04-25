@@ -7,6 +7,9 @@ struct PopoverView: View {
     @ObservedObject var settings: AppSettings
     let openSettings: () -> Void
 
+    @State private var refreshSpin = false
+    @State private var hoveredProvider: String?
+
     private var formatter: QuotaFormatter {
         QuotaFormatter(quotaPerUnit: settings.quotaPerUnit)
     }
@@ -66,7 +69,8 @@ struct PopoverView: View {
             ForEach(0..<3, id: \.self) { row in
                 GridRow {
                     ForEach(0..<4, id: \.self) { col in
-                        Image(providers[row * 4 + col])
+                        let name = providers[row * 4 + col]
+                        Image(name)
                             .resizable()
                             .renderingMode(.original)
                             .aspectRatio(contentMode: .fit)
@@ -74,6 +78,12 @@ struct PopoverView: View {
                             .padding(8)
                             .background(.regularMaterial,
                                         in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            .scaleEffect(hoveredProvider == name ? 1.08 : 1.0)
+                            .animation(.spring(response: 0.32, dampingFraction: 0.7),
+                                       value: hoveredProvider)
+                            .onHover { isHovering in
+                                hoveredProvider = isHovering ? name : nil
+                            }
                     }
                 }
             }
@@ -109,6 +119,8 @@ struct PopoverView: View {
                     .minimumScaleFactor(0.6)
                     .lineLimit(1)
                     .foregroundStyle(isLow ? Theme.warning : .primary)
+                    .contentTransition(.numericText())
+                    .animation(.snappy, value: balanceText)
             }
             Spacer(minLength: 8)
             if let asset = topProviderAsset {
@@ -165,17 +177,12 @@ struct PopoverView: View {
     private var probeRow: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
-                Circle()
-                    .fill(probe.snapshot?.health.color ?? .gray)
-                    .frame(width: 8, height: 8)
-                    .overlay(Circle().strokeBorder(.white.opacity(0.3), lineWidth: 0.5))
-                Text("探针")
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                Spacer(minLength: 12)
+                ProbeStatusDot(color: probe.snapshot?.health.color ?? .gray,
+                                pulsing: probe.snapshot?.health == .healthy)
                 probeStatusText
                     .lineLimit(1)
                     .truncationMode(.middle)
+                Spacer(minLength: 0)
             }
 
             probeChart
@@ -208,7 +215,7 @@ struct PopoverView: View {
         var parts: [String] = [channel]
         parts.append(s.health == .down ? s.health.label : "\(s.latencyMS) ms")
         if let up = probe.uptime24h {
-            parts.append(String(format: "%.1f%% 24h 可用", up * 100))
+            parts.append(String(format: "%.1f%%", up * 100))
         }
         return parts.joined(separator: " · ")
     }
@@ -237,10 +244,16 @@ struct PopoverView: View {
                             .frame(width: barWidth,
                                    height: barHeight(for: sample))
                             .help(barTooltip(for: sample))
+                            .transition(.asymmetric(
+                                insertion: .scale(scale: 0.6, anchor: .bottom)
+                                    .combined(with: .opacity),
+                                removal: .opacity
+                            ))
                     }
                 }
             }
             .frame(width: geo.size.width, height: 22, alignment: .bottom)
+            .animation(.smooth(duration: 0.45), value: samples)
         }
         .frame(height: 22)
     }
@@ -293,12 +306,14 @@ struct PopoverView: View {
                         .frame(width: iconSize(for: provider, top: top),
                                height: iconSize(for: provider, top: top))
                         .help("\(provider.providerAsset.capitalized) — \(provider.requestCount) 次调用")
+                        .transition(.scale.combined(with: .opacity))
                 }
             }
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 4)
         .frame(maxWidth: .infinity)
+        .animation(.smooth(duration: 0.4), value: modelStats.topProviders)
     }
 
     private func iconSize(for p: ProviderUsage, top: [ProviderUsage]) -> CGFloat {
@@ -311,9 +326,16 @@ struct PopoverView: View {
         GlassEffectContainer(spacing: 8) {
             HStack(spacing: 8) {
                 Button {
-                    Task { await poller.refresh(); await modelStats.refresh(); await probe.refresh() }
+                    refreshSpin.toggle()
+                    Task {
+                        await poller.refresh()
+                        await modelStats.refresh()
+                        await probe.refresh()
+                    }
                 } label: {
                     Image(systemName: "arrow.clockwise")
+                        .rotationEffect(.degrees(refreshSpin ? 360 : 0))
+                        .animation(.easeOut(duration: 0.6), value: refreshSpin)
                 }
                 .keyboardShortcut("r")
                 .buttonStyle(.glassProminent)
@@ -332,9 +354,14 @@ struct PopoverView: View {
 
                 Spacer()
 
-                Button("设置…") { openSettings() }
-                    .keyboardShortcut(",")
-                    .buttonStyle(.glass)
+                Button {
+                    openSettings()
+                } label: {
+                    Image(systemName: "gearshape")
+                }
+                .keyboardShortcut(",")
+                .buttonStyle(.glass)
+                .help("设置")
 
                 Button {
                     NSApp.terminate(nil)
@@ -381,5 +408,43 @@ struct PopoverView: View {
     private var isLow: Bool {
         guard let s = poller.snapshot else { return false }
         return formatter.usd(fromRaw: s.quotaRaw) < settings.lowBalanceThresholdUSD
+    }
+}
+
+/// Small status indicator: a solid dot, surrounded by a "pinging" halo when
+/// the service is healthy. The halo expands and fades, looping forever — a
+/// quiet visual sign that monitoring is live. Down/degraded states render
+/// the dot only, no halo (you don't want a soothing pulse on a red light).
+private struct ProbeStatusDot: View {
+    let color: Color
+    let pulsing: Bool
+
+    @State private var animate = false
+
+    var body: some View {
+        ZStack {
+            if pulsing {
+                Circle()
+                    .fill(color.opacity(0.45))
+                    .frame(width: 8, height: 8)
+                    .scaleEffect(animate ? 2.4 : 1.0)
+                    .opacity(animate ? 0 : 0.7)
+                    .animation(
+                        .easeOut(duration: 1.8).repeatForever(autoreverses: false),
+                        value: animate
+                    )
+            }
+            Circle()
+                .fill(color)
+                .frame(width: 8, height: 8)
+                .overlay(
+                    Circle().strokeBorder(.white.opacity(0.3), lineWidth: 0.5)
+                )
+        }
+        .frame(width: 14, height: 14)
+        .onAppear { animate = pulsing }
+        .onChange(of: pulsing) { _, newValue in
+            animate = newValue
+        }
     }
 }
