@@ -2,6 +2,7 @@ import SwiftUI
 
 struct PopoverView: View {
     @ObservedObject var poller: QuotaPoller
+    @ObservedObject var modelStats: ModelStatsPoller
     @ObservedObject var settings: AppSettings
     let openSettings: () -> Void
 
@@ -112,10 +113,10 @@ struct PopoverView: View {
 
     private var statsBlock: some View {
         VStack(alignment: .leading, spacing: 10) {
-            VStack(spacing: 8) {
-                LabeledContent("Used", value: usedText)
-                LabeledContent("Requests", value: requestText)
-                LabeledContent("Last refresh", value: refreshedText)
+            VStack(alignment: .leading, spacing: 8) {
+                statRow("Used", value: usedText)
+                statRow("Requests", value: requestText)
+                statRow("Last refresh", value: refreshedText)
                 if let error = poller.lastError {
                     Label(String(describing: error), systemImage: "exclamationmark.triangle")
                         .font(.caption)
@@ -125,38 +126,64 @@ struct PopoverView: View {
                 }
             }
             .font(.callout)
+            .frame(maxWidth: .infinity, alignment: .leading)
 
             Divider().opacity(0.4)
 
             providerStrip
         }
         .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 
-    /// Subtle row of provider icons hinting at the breadth of models the gateway routes.
-    /// Decorative for v0.1 — M2 will wire this to /api/user/models for the real list.
-    private var providerStrip: some View {
-        let providers = [
-            "claude", "openai", "gemini", "deepseek",
-            "qwen", "kimi", "doubao", "mistral",
-        ]
-        return HStack(spacing: 6) {
-            Text("Models")
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
-            ForEach(providers, id: \.self) { name in
-                Image(name)
-                    .resizable()
-                    .renderingMode(.original)
-                    .aspectRatio(contentMode: .fit)
-                    .frame(width: 16, height: 16)
-                    .opacity(0.85)
-            }
-            Text("+more")
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
+    /// Label-leading / value-trailing row that always spans the full container width.
+    private func statRow(_ label: String, value: String) -> some View {
+        HStack {
+            Text(label).foregroundStyle(.secondary)
+            Spacer(minLength: 12)
+            Text(value).monospacedDigit()
         }
+        .frame(maxWidth: .infinity)
+    }
+
+    /// Real top providers from the user's last-30d /api/data/self rollup,
+    /// sized by relative quota share. Largest provider gets a 22pt icon,
+    /// others scale down to 14pt min. Falls back to a placeholder line
+    /// when the fetch hasn't returned yet.
+    private var providerStrip: some View {
+        let top = Array(modelStats.topProviders.prefix(5))
+        return HStack(alignment: .center, spacing: 8) {
+            Text("Top models")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+            if top.isEmpty {
+                Text(modelStats.lastError == nil ? "loading…" : "—")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            } else {
+                ForEach(top) { provider in
+                    Image(provider.providerAsset)
+                        .resizable()
+                        .renderingMode(.original)
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: iconSize(for: provider, top: top),
+                               height: iconSize(for: provider, top: top))
+                        .help("\(provider.providerAsset.capitalized) — \(provider.requestCount) requests")
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    /// 22pt for the biggest, scaled linearly down to 14pt for the smallest in
+    /// the top-N list. If only one provider, give it 18pt — no need to flex
+    /// when there's nothing to compare against.
+    private func iconSize(for p: ProviderUsage, top: [ProviderUsage]) -> CGFloat {
+        guard top.count > 1, let max = top.first?.quotaRaw, max > 0 else { return 18 }
+        let ratio = CGFloat(p.quotaRaw) / CGFloat(max)
+        return 14 + ratio * 8 // 14...22
     }
 
     private var actionRow: some View {

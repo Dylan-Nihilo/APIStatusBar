@@ -6,10 +6,14 @@ struct MenuBarLabel: View {
     let lowBalanceThresholdUSD: Double
     let hasError: Bool
     let isConfigured: Bool
+    /// Asset name of the top-used provider's color icon. When set and configured,
+    /// replaces the generic SF Symbol with the model's brand icon.
+    let topProviderAsset: String?
 
     var body: some View {
-        HStack(spacing: 4) {
-            Image(systemName: iconName)
+        HStack(alignment: .center, spacing: 4) {
+            iconView
+                .frame(width: 14, height: 14)
             if isConfigured {
                 Text(label)
                     .foregroundStyle(isLow ? Theme.warning : .primary)
@@ -17,6 +21,31 @@ struct MenuBarLabel: View {
             } else {
                 Text("Setup")
             }
+        }
+        .font(.system(size: 13, weight: .medium))
+    }
+
+    @ViewBuilder
+    private var iconView: some View {
+        if !isConfigured {
+            Image(systemName: "gearshape")
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+        } else if hasError {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .foregroundStyle(Theme.warning)
+        } else if let asset = topProviderAsset {
+            Image(asset)
+                .resizable()
+                .renderingMode(.original)
+                .aspectRatio(contentMode: .fit)
+        } else {
+            Image(systemName: "dollarsign.circle.fill")
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .foregroundStyle(Theme.accent)
         }
     }
 
@@ -33,11 +62,5 @@ struct MenuBarLabel: View {
     private var isLow: Bool {
         guard let usd else { return false }
         return usd < lowBalanceThresholdUSD
-    }
-
-    private var iconName: String {
-        if !isConfigured { return "gear" }
-        if hasError { return "exclamationmark.triangle" }
-        return "gauge.with.dots.needle.bottom.50percent"
     }
 }

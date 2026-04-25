@@ -18,6 +18,24 @@ struct UserSelfResponse: Decodable, Equatable {
     }
 }
 
+/// One row from `/api/data/self`. new-api aggregates per (model, hour) bucket,
+/// so we fold these into per-model totals on the client.
+struct QuotaDataRow: Decodable, Equatable {
+    let modelName: String
+    let createdAt: Int64
+    let count: Int
+    let quota: Int
+    let tokenUsed: Int
+
+    private enum CodingKeys: String, CodingKey {
+        case modelName = "model_name"
+        case createdAt = "created_at"
+        case count
+        case quota
+        case tokenUsed = "token_used"
+    }
+}
+
 private struct EnvelopedResponse<T: Decodable>: Decodable {
     let success: Bool
     let message: String
@@ -38,7 +56,31 @@ struct NewAPIClient {
     }
 
     func getSelf() async throws -> UserSelfResponse {
-        var req = URLRequest(url: baseURL.appendingPathComponent("api/user/self"))
+        try await getEnveloped(path: "api/user/self", query: [:])
+    }
+
+    /// Fetch per-model usage rows in a time window. Server enforces a 30-day
+    /// max per call — caller must split larger ranges.
+    func getDataSelf(start: Date, end: Date) async throws -> [QuotaDataRow] {
+        let q: [String: String] = [
+            "start_timestamp": String(Int(start.timeIntervalSince1970)),
+            "end_timestamp": String(Int(end.timeIntervalSince1970)),
+        ]
+        let rows: [QuotaDataRow]? = try await getEnveloped(path: "api/data/self", query: q)
+        return rows ?? []
+    }
+
+    // MARK: - Internal
+
+    private func getEnveloped<T: Decodable>(path: String, query: [String: String]) async throws -> T {
+        var components = URLComponents(url: baseURL.appendingPathComponent(path),
+                                        resolvingAgainstBaseURL: false)
+        if !query.isEmpty {
+            components?.queryItems = query.map { URLQueryItem(name: $0.key, value: $0.value) }
+        }
+        guard let url = components?.url else { throw NewAPIError.httpStatus(-1) }
+
+        var req = URLRequest(url: url)
         req.httpMethod = "GET"
         req.setValue(accessToken, forHTTPHeaderField: "Authorization")
         req.setValue(String(userID), forHTTPHeaderField: "New-Api-User")
@@ -49,9 +91,9 @@ struct NewAPIClient {
             throw NewAPIError.httpStatus(http.statusCode)
         }
 
-        let decoded: EnvelopedResponse<UserSelfResponse>
+        let decoded: EnvelopedResponse<T>
         do {
-            decoded = try JSONDecoder().decode(EnvelopedResponse<UserSelfResponse>.self, from: data)
+            decoded = try JSONDecoder().decode(EnvelopedResponse<T>.self, from: data)
         } catch {
             throw NewAPIError.decoding
         }
