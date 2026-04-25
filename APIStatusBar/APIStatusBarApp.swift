@@ -64,7 +64,9 @@ private struct PopoverHost: View {
         }
         .onAppear {
             rebuildPoller()
-            if poller.snapshot == nil {
+            // Only kick off a refresh when we have a real server to talk to —
+            // otherwise we get a phantom spinner while a request to invalid.local times out.
+            if poller.snapshot == nil && settings.isConfigured {
                 Task { await poller.refresh() }
             }
         }

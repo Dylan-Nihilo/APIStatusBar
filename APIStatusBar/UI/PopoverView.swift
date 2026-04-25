@@ -22,15 +22,21 @@ struct PopoverView: View {
     }
 
     private var balanceCard: some View {
-        HStack {
+        HStack(alignment: .center) {
             VStack(alignment: .leading, spacing: 2) {
-                Text("Remaining").font(.caption).foregroundStyle(.secondary)
+                Text(settings.isConfigured ? "Remaining" : "Not configured")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 Text(balanceText)
-                    .font(.system(size: 32, weight: .semibold, design: .rounded))
+                    .font(.system(size: settings.isConfigured ? 32 : 22,
+                                  weight: .semibold,
+                                  design: .rounded))
                     .monospacedDigit()
+                    .minimumScaleFactor(0.6)
+                    .lineLimit(1)
                     .foregroundStyle(isLow ? Theme.warning : .primary)
             }
-            Spacer()
+            Spacer(minLength: 8)
             if poller.isRefreshing {
                 ProgressView().controlSize(.small)
             }
@@ -58,33 +64,44 @@ struct PopoverView: View {
 
     private var footerRow: some View {
         HStack(spacing: 6) {
-            Button("Refresh") {
+            Button {
                 Task { await poller.refresh() }
+            } label: {
+                Image(systemName: "arrow.clockwise")
             }
             .keyboardShortcut("r")
-            .glassEffect(.regular.tint(Theme.accent.opacity(0.4)).interactive(),
-                         in: Capsule())
+            .buttonStyle(.glassProminent)
+            .tint(Theme.accent)
+            .disabled(!settings.isConfigured)
+            .help("Refresh now")
 
-            Button("Web Console") {
+            Button {
                 if let url = URL(string: settings.serverURL), url.host != nil {
                     NSWorkspace.shared.open(url)
                 }
+            } label: {
+                Image(systemName: "safari")
             }
+            .buttonStyle(.glass)
             .disabled(!settings.isConfigured)
-            .glassEffect(.regular.interactive(), in: Capsule())
+            .help("Open Web Console")
 
             Spacer()
 
             Button("Settings…") { openSettings() }
                 .keyboardShortcut(",")
-                .glassEffect(.regular.interactive(), in: Capsule())
+                .buttonStyle(.glass)
 
-            Button("Quit") { NSApp.terminate(nil) }
-                .keyboardShortcut("q")
-                .glassEffect(.regular.interactive(), in: Capsule())
+            Button {
+                NSApp.terminate(nil)
+            } label: {
+                Image(systemName: "power")
+            }
+            .keyboardShortcut("q")
+            .buttonStyle(.glass)
+            .help("Quit")
         }
         .controlSize(.small)
-        .buttonStyle(.plain)
     }
 
     private func row(_ key: String, value: String) -> some View {
@@ -97,7 +114,9 @@ struct PopoverView: View {
     }
 
     private var balanceText: String {
-        guard let snap = poller.snapshot else { return settings.isConfigured ? "—" : "Setup needed" }
+        guard let snap = poller.snapshot else {
+            return settings.isConfigured ? "—" : "Tap Settings"
+        }
         return formatter.displayString(usd: formatter.usd(fromRaw: snap.quotaRaw))
     }
 
