@@ -19,7 +19,7 @@ struct MenuBarLabel: View {
                     .foregroundStyle(isLow ? Theme.warning : .primary)
                     .monospacedDigit()
             } else {
-                Text("Setup")
+                Text("待配置")
             }
         }
         .font(.system(size: 13, weight: .medium))

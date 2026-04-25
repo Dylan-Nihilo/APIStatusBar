@@ -29,9 +29,9 @@ struct PopoverView: View {
             providerGrid
 
             VStack(spacing: 6) {
-                Text("Set up your account")
+                Text("尚未配置")
                     .font(.headline)
-                Text("Add your new-api server URL and access token to start tracking your balance across every model your gateway routes.")
+                Text("填入 new-api 服务器地址和访问令牌，即可追踪账户余额和各模型用量。")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -39,7 +39,7 @@ struct PopoverView: View {
             }
             .padding(.horizontal, 4)
 
-            Button("Open Settings…") { openSettings() }
+            Button("打开设置…") { openSettings() }
                 .buttonStyle(.glassProminent)
                 .tint(Theme.accent)
                 .controlSize(.large)
@@ -47,7 +47,7 @@ struct PopoverView: View {
             Divider().opacity(0.5)
             HStack {
                 Spacer()
-                Button("Quit") { NSApp.terminate(nil) }
+                Button("退出") { NSApp.terminate(nil) }
                     .buttonStyle(.borderless)
                     .controlSize(.small)
                     .keyboardShortcut("q")
@@ -96,7 +96,7 @@ struct PopoverView: View {
         HStack(alignment: .center, spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {
-                    Text("Remaining")
+                    Text("剩余额度")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     if poller.isRefreshing {
@@ -117,7 +117,7 @@ struct PopoverView: View {
                     .renderingMode(.original)
                     .aspectRatio(contentMode: .fit)
                     .frame(width: 44, height: 44)
-                    .help("Top model · \(asset.capitalized)")
+                    .help("最常用模型 · \(asset.capitalized)")
             }
         }
         .padding(14)
@@ -127,9 +127,9 @@ struct PopoverView: View {
 
     private var statsBlock: some View {
         VStack(alignment: .leading, spacing: 8) {
-            statRow("Used", value: usedText)
-            statRow("Requests", value: requestText)
-            statRow("Last refresh", value: refreshedText)
+            statRow("已用", value: usedText)
+            statRow("请求次数", value: requestText)
+            statRow("上次刷新", value: refreshedText)
             if let error = poller.lastError {
                 Label(String(describing: error), systemImage: "exclamationmark.triangle")
                     .font(.caption)
@@ -169,7 +169,7 @@ struct PopoverView: View {
                     .fill(probe.snapshot?.health.color ?? .gray)
                     .frame(width: 8, height: 8)
                     .overlay(Circle().strokeBorder(.white.opacity(0.3), lineWidth: 0.5))
-                Text("Probe")
+                Text("探针")
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                 Spacer(minLength: 12)
@@ -190,10 +190,10 @@ struct PopoverView: View {
                 .foregroundStyle(.secondary)
                 .monospacedDigit()
         } else if probe.lastError != nil {
-            Text("Probe unavailable")
+            Text("探针不可用")
                 .foregroundStyle(.tertiary)
         } else {
-            Text("Awaiting probe")
+            Text("等待探测")
                 .foregroundStyle(.tertiary)
         }
     }
@@ -208,7 +208,7 @@ struct PopoverView: View {
         var parts: [String] = [channel]
         parts.append(s.health == .down ? s.health.label : "\(s.latencyMS) ms")
         if let up = probe.uptime24h {
-            parts.append(String(format: "%.1f%% 24h", up * 100))
+            parts.append(String(format: "%.1f%% 24h 可用", up * 100))
         }
         return parts.joined(separator: " · ")
     }
@@ -261,6 +261,7 @@ struct PopoverView: View {
     private func barTooltip(for sample: ProbePoller.Snapshot) -> String {
         let f = RelativeDateTimeFormatter()
         f.unitsStyle = .abbreviated
+        f.locale = Locale(identifier: "zh-Hans")
         let when = f.localizedString(for: sample.timestamp, relativeTo: Date())
         if sample.health == .down {
             return "\(sample.health.label) · \(when)"
@@ -273,13 +274,13 @@ struct PopoverView: View {
     private var topModelsStrip: some View {
         let top = Array(modelStats.topProviders.prefix(5))
         return HStack(alignment: .center, spacing: 8) {
-            Text("Top models")
+            Text("常用模型")
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
                 .lineLimit(1)
                 .fixedSize()
             if top.isEmpty {
-                Text(modelStats.lastError == nil ? "loading…" : "—")
+                Text(modelStats.lastError == nil ? "加载中…" : "—")
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
                     .lineLimit(1)
@@ -291,7 +292,7 @@ struct PopoverView: View {
                         .aspectRatio(contentMode: .fit)
                         .frame(width: iconSize(for: provider, top: top),
                                height: iconSize(for: provider, top: top))
-                        .help("\(provider.providerAsset.capitalized) — \(provider.requestCount) requests")
+                        .help("\(provider.providerAsset.capitalized) — \(provider.requestCount) 次调用")
                 }
             }
             Spacer(minLength: 0)
@@ -317,7 +318,7 @@ struct PopoverView: View {
                 .keyboardShortcut("r")
                 .buttonStyle(.glassProminent)
                 .tint(Theme.accent)
-                .help("Refresh now")
+                .help("立即刷新")
 
                 Button {
                     if let url = URL(string: settings.serverURL), url.host != nil {
@@ -327,11 +328,11 @@ struct PopoverView: View {
                     Image(systemName: "safari")
                 }
                 .buttonStyle(.glass)
-                .help("Open Web Console")
+                .help("打开 Web 控制台")
 
                 Spacer()
 
-                Button("Settings…") { openSettings() }
+                Button("设置…") { openSettings() }
                     .keyboardShortcut(",")
                     .buttonStyle(.glass)
 
@@ -342,7 +343,7 @@ struct PopoverView: View {
                 }
                 .keyboardShortcut("q")
                 .buttonStyle(.glass)
-                .help("Quit")
+                .help("退出")
             }
             .controlSize(.small)
         }
@@ -370,9 +371,10 @@ struct PopoverView: View {
     }
 
     private var refreshedText: String {
-        guard let s = poller.snapshot else { return "never" }
+        guard let s = poller.snapshot else { return "尚未刷新" }
         let f = RelativeDateTimeFormatter()
         f.unitsStyle = .abbreviated
+        f.locale = Locale(identifier: "zh-Hans")
         return f.localizedString(for: s.fetchedAt, relativeTo: Date())
     }
 

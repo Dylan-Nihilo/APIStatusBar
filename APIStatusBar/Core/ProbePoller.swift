@@ -29,10 +29,10 @@ final class ProbePoller: ObservableObject {
 
         var label: String {
             switch self {
-            case .healthy:  return "All systems normal"
-            case .degraded: return "Degraded"
-            case .down:     return "Service down"
-            case .unknown:  return "Awaiting probe"
+            case .healthy:  return "服务正常"
+            case .degraded: return "服务降级"
+            case .down:     return "服务中断"
+            case .unknown:  return "等待探测"
             }
         }
     }

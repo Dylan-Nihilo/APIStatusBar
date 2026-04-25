@@ -24,8 +24,8 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
-            Section("Server") {
-                LabeledContent("URL") {
+            Section("服务器") {
+                LabeledContent("地址") {
                     TextField("https://api.your-host.com", text: $settings.serverURL)
                         .textFieldStyle(.roundedBorder)
                         .autocorrectionDisabled()
@@ -33,20 +33,20 @@ struct SettingsView: View {
                         .frame(minWidth: 240)
                 }
 
-                LabeledContent("Console") {
-                    Button("Open in Browser…") { openInBrowser() }
+                LabeledContent("控制台") {
+                    Button("在浏览器中打开…") { openInBrowser() }
                         .disabled(URL(string: settings.serverURL)?.host == nil)
                 }
             }
 
             Section {
-                LabeledContent("Access Token") {
+                LabeledContent("访问令牌") {
                     HStack(spacing: 6) {
                         Group {
                             if isTokenRevealed {
-                                TextField("paste UUID", text: $accessToken)
+                                TextField("粘贴 UUID", text: $accessToken)
                             } else {
-                                SecureField("paste UUID", text: $accessToken)
+                                SecureField("粘贴 UUID", text: $accessToken)
                             }
                         }
                         .focused($tokenFocused)
@@ -66,7 +66,7 @@ struct SettingsView: View {
                             Image(systemName: isTokenRevealed ? "eye.slash" : "eye")
                         }
                         .buttonStyle(.borderless)
-                        .help(isTokenRevealed ? "Hide token" : "Show token")
+                        .help(isTokenRevealed ? "隐藏令牌" : "显示令牌")
 
                         Button {
                             if let pasted = NSPasteboard.general.string(forType: .string) {
@@ -76,11 +76,11 @@ struct SettingsView: View {
                             Image(systemName: "doc.on.clipboard")
                         }
                         .buttonStyle(.borderless)
-                        .help("Paste from clipboard")
+                        .help("从剪贴板粘贴")
                     }
                 }
 
-                LabeledContent("User ID") {
+                LabeledContent("用户 ID") {
                     HStack(spacing: 6) {
                         TextField("", value: $settings.userID, format: .number)
                             .textFieldStyle(.roundedBorder)
@@ -88,14 +88,14 @@ struct SettingsView: View {
                             .multilineTextAlignment(.trailing)
                         Stepper("", value: $settings.userID, in: 0...10_000_000)
                             .labelsHidden()
-                        Button("Auto-detect") {
+                        Button("自动检测") {
                             Task { await autoDetectUserID() }
                         }
                         .disabled(accessToken.isEmpty || isScanning)
                     }
                 }
 
-                LabeledContent("Connection") {
+                LabeledContent("连接") {
                     HStack(spacing: 8) {
                         Button {
                             Task { await verifyConnection() }
@@ -103,10 +103,10 @@ struct SettingsView: View {
                             if verification == .checking {
                                 HStack(spacing: 4) {
                                     ProgressView().controlSize(.mini)
-                                    Text("Verifying…")
+                                    Text("验证中…")
                                 }
                             } else {
-                                Text("Verify Connection")
+                                Text("验证连接")
                             }
                         }
                         .disabled(!canVerify)
@@ -115,13 +115,13 @@ struct SettingsView: View {
                     }
                 }
             } header: {
-                Text("Credentials")
+                Text("凭据")
             } footer: {
                 helpFooter
             }
 
-            Section("Conversion") {
-                LabeledContent("Quota per $1") {
+            Section("换算") {
+                LabeledContent("每 $1 配额") {
                     HStack(spacing: 6) {
                         TextField("", value: $settings.quotaPerUnit, format: .number)
                             .textFieldStyle(.roundedBorder)
@@ -136,13 +136,13 @@ struct SettingsView: View {
                 }
             }
 
-            Section("Polling") {
-                LabeledContent("Refresh interval") {
-                    Stepper("\(settings.refreshIntervalSeconds) s",
+            Section("轮询") {
+                LabeledContent("刷新间隔") {
+                    Stepper("\(settings.refreshIntervalSeconds) 秒",
                             value: $settings.refreshIntervalSeconds,
                             in: 15...3600, step: 15)
                 }
-                LabeledContent("Low-balance threshold") {
+                LabeledContent("低额度阈值") {
                     Stepper("$\(settings.lowBalanceThresholdUSD, specifier: "%.0f")",
                             value: $settings.lowBalanceThresholdUSD,
                             in: 0...1000, step: 1)
@@ -151,7 +151,7 @@ struct SettingsView: View {
         }
         .formStyle(.grouped)
         .frame(width: 500, height: 480)
-        .navigationTitle("APIStatusBar Settings")
+        .navigationTitle("APIStatusBar 设置")
         .onAppear {
             accessToken = (try? KeychainStore.readAccessToken()) ?? ""
         }
@@ -178,9 +178,9 @@ struct SettingsView: View {
     @ViewBuilder
     private var helpFooter: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Label("Token is the UUID from Personal Settings → System Access Token → Generate Token. Not an `sk-…` API key.",
+            Label("访问令牌是 个人设置 → 系统访问令牌 → 生成令牌 处的 UUID，不是 `sk-…` 开头的 API Key。",
                   systemImage: "key.fill")
-            Label("If User ID 1 fails to verify, tap **Auto-detect** to scan 1–50 with your token.",
+            Label("如果用户 ID 验证失败，点击 **自动检测** 用当前令牌扫描 1–50。",
                   systemImage: "person.crop.circle.badge.questionmark")
         }
         .font(.caption)
@@ -208,7 +208,7 @@ struct SettingsView: View {
     private func verifyConnection() async {
         verification = .checking
         guard let url = URL(string: settings.serverURL), url.host != nil else {
-            verification = .failure("Server URL invalid")
+            verification = .failure("服务器地址无效")
             return
         }
         let client = NewAPIClient(baseURL: url, accessToken: accessToken, userID: settings.userID)
@@ -219,13 +219,13 @@ struct SettingsView: View {
         } catch let err as NewAPIError {
             switch err {
             case .httpStatus(401):
-                verification = .failure("HTTP 401 — User ID may not match this token")
+                verification = .failure("HTTP 401 — 用户 ID 可能与此令牌不匹配")
             case .httpStatus(let code):
                 verification = .failure("HTTP \(code)")
             case .apiFailure(let msg):
                 verification = .failure(msg)
             case .decoding:
-                verification = .failure("Unexpected response")
+                verification = .failure("响应格式异常")
             }
         } catch {
             verification = .failure(error.localizedDescription)
@@ -250,6 +250,6 @@ struct SettingsView: View {
             }
         }
         detection = .notFound
-        verification = .failure("No matching ID in 1–50. Check /console/user.")
+        verification = .failure("1–50 中未找到匹配 ID，请到 /console/user 查看")
     }
 }
