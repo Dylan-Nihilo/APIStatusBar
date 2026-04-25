@@ -148,9 +148,13 @@ struct PopoverView: View {
 
     private func statRow(_ label: String, value: String) -> some View {
         HStack {
-            Text(label).foregroundStyle(.secondary)
+            Text(label)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
             Spacer(minLength: 12)
-            Text(value).monospacedDigit()
+            Text(value)
+                .monospacedDigit()
+                .lineLimit(1)
         }
         .frame(maxWidth: .infinity)
     }
@@ -167,8 +171,11 @@ struct PopoverView: View {
                     .overlay(Circle().strokeBorder(.white.opacity(0.3), lineWidth: 0.5))
                 Text("Probe")
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
                 Spacer(minLength: 12)
                 probeStatusText
+                    .lineLimit(1)
+                    .truncationMode(.middle)
             }
 
             probeChart
@@ -179,34 +186,34 @@ struct PopoverView: View {
     @ViewBuilder
     private var probeStatusText: some View {
         if let s = probe.snapshot {
-            // Real source: show "channel · ping · uptime%"
-            if let channel = probe.primaryChannelName {
-                HStack(spacing: 6) {
-                    Text(channel).foregroundStyle(.secondary)
-                    Text("·").foregroundStyle(.tertiary)
-                    if s.health == .down {
-                        Text(s.health.label)
-                    } else {
-                        Text("\(s.latencyMS) ms").monospacedDigit()
-                    }
-                    if let up = probe.uptime24h {
-                        Text("·").foregroundStyle(.tertiary)
-                        Text(String(format: "%.1f%% 24h", up * 100))
-                            .foregroundStyle(.tertiary)
-                            .monospacedDigit()
-                    }
-                }
-            } else {
-                // Mock fallback
-                if s.health == .down {
-                    Text(s.health.label).monospacedDigit()
-                } else {
-                    Text("\(s.health.label) · \(s.latencyMS) ms").monospacedDigit()
-                }
+            Text(probeStatusString(s))
+                .foregroundStyle(.secondary)
+                .monospacedDigit()
+        } else {
+            Text("Checking…")
+                .foregroundStyle(.tertiary)
+        }
+    }
+
+    /// Single-line status summary so SwiftUI's truncation works cleanly
+    /// instead of an HStack of segments wrapping unpredictably.
+    private func probeStatusString(_ s: ProbePoller.Snapshot) -> String {
+        var parts: [String] = []
+        if let channel = probe.primaryChannelName {
+            parts.append(channel)
+            parts.append(s.health == .down ? s.health.label : "\(s.latencyMS) ms")
+            if let up = probe.uptime24h {
+                parts.append(String(format: "%.1f%% 24h", up * 100))
             }
         } else {
-            Text("Checking…").foregroundStyle(.tertiary)
+            // Mock fallback — no channel name, show the descriptive label.
+            if s.health == .down {
+                parts.append(s.health.label)
+            } else {
+                parts.append("\(s.health.label) · \(s.latencyMS) ms")
+            }
         }
+        return parts.joined(separator: " · ")
     }
 
     private var probeChart: some View {
@@ -263,10 +270,13 @@ struct PopoverView: View {
             Text("Top models")
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
+                .lineLimit(1)
+                .fixedSize()
             if top.isEmpty {
                 Text(modelStats.lastError == nil ? "loading…" : "—")
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
+                    .lineLimit(1)
             } else {
                 ForEach(top) { provider in
                     Image(provider.providerAsset)
