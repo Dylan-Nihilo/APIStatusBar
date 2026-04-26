@@ -15,7 +15,8 @@ struct APIStatusBarApp: App {
         _poller = StateObject(wrappedValue: QuotaPoller(client: client,
                                                           intervalSeconds: settings.refreshIntervalSeconds))
         _modelStats = StateObject(wrappedValue: ModelStatsPoller(client: client,
-                                                                  intervalSeconds: 300))
+                                                                  intervalSeconds: 300,
+                                                                  quotaPerUnit: settings.quotaPerUnit))
     }
 
     var body: some Scene {
