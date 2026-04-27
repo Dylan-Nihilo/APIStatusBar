@@ -7,7 +7,6 @@ struct SettingsView: View {
     @State private var isTokenRevealed: Bool = false
     @State private var verification: Verification = .idle
     @State private var lastSavedAccessToken: String = ""
-    @State private var showAdvanced: Bool = false
     @FocusState private var tokenFocused: Bool
 
     enum Verification: Equatable {
@@ -18,37 +17,24 @@ struct SettingsView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .center) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("APIStatusBar")
-                        .font(.title3.weight(.semibold))
-                        .foregroundStyle(Theme.accentStrong)
-                    Text("new-api 账户监控")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                connectionBadge
-            }
-
-            settingsSection("服务器") {
-                settingRow("地址") {
+        Form {
+            Section("服务器") {
+                LabeledContent("地址") {
                     TextField("https://api.your-host.com", text: $settings.serverURL)
                         .textFieldStyle(.roundedBorder)
                         .autocorrectionDisabled()
                         .textContentType(.URL)
-                        .frame(minWidth: 280)
+                        .frame(minWidth: 240)
                 }
 
-                settingRow("控制台") {
+                LabeledContent("控制台") {
                     Button("打开") { openInBrowser() }
                         .disabled(URL(string: settings.serverURL)?.host == nil)
                 }
             }
 
-            settingsSection("凭据") {
-                settingRow("令牌") {
+            Section {
+                LabeledContent("令牌") {
                     HStack(spacing: 6) {
                         Group {
                             if isTokenRevealed {
@@ -61,25 +47,33 @@ struct SettingsView: View {
                         .textFieldStyle(.roundedBorder)
                         .textContentType(.password)
                         .autocorrectionDisabled()
+                        .frame(minWidth: 200)
                         .onChange(of: accessToken) { _, _ in
                             verification = .idle
                         }
 
-                        iconButton(isTokenRevealed ? "eye.slash" : "eye",
-                                   help: isTokenRevealed ? "隐藏令牌" : "显示令牌") {
+                        Button {
                             isTokenRevealed.toggle()
                             tokenFocused = true
+                        } label: {
+                            Image(systemName: isTokenRevealed ? "eye.slash" : "eye")
                         }
+                        .buttonStyle(.borderless)
+                        .help(isTokenRevealed ? "隐藏令牌" : "显示令牌")
 
-                        iconButton("doc.on.clipboard", help: "从剪贴板粘贴") {
+                        Button {
                             if let pasted = NSPasteboard.general.string(forType: .string) {
                                 accessToken = pasted.trimmingCharacters(in: .whitespacesAndNewlines)
                             }
+                        } label: {
+                            Image(systemName: "doc.on.clipboard")
                         }
+                        .buttonStyle(.borderless)
+                        .help("从剪贴板粘贴")
                     }
                 }
 
-                settingRow("连接") {
+                LabeledContent("连接") {
                     HStack(spacing: 8) {
                         Button {
                             Task { await verifyConnection() }
@@ -98,40 +92,34 @@ struct SettingsView: View {
                         statusInline
                     }
                 }
-
+            } header: {
+                Text("凭据")
+            } footer: {
                 helpFooter
             }
 
-            settingsSection("高级") {
-                DisclosureGroup("计费与轮询", isExpanded: $showAdvanced) {
-                    VStack(spacing: 10) {
-                        settingRow("每 $1") {
-                            intControl(value: $settings.quotaPerUnit,
-                                       range: 1_000...10_000_000,
-                                       step: 50_000,
-                                       suffix: "")
-                        }
-                        settingRow("刷新") {
-                            intControl(value: $settings.refreshIntervalSeconds,
-                                       range: 15...3600,
-                                       step: 15,
-                                       suffix: "秒")
-                        }
-                        settingRow("低余额") {
-                            doubleControl(value: $settings.lowBalanceThresholdUSD,
-                                          range: 0...1000,
-                                          step: 1,
-                                          prefix: "$")
-                        }
-                    }
-                    .padding(.top, 8)
+            Section("计费与轮询") {
+                LabeledContent("每 $1") {
+                    Stepper("\(settings.quotaPerUnit.formatted())",
+                            value: $settings.quotaPerUnit,
+                            in: 1_000...10_000_000,
+                            step: 50_000)
                 }
-                .font(.callout)
+                LabeledContent("刷新间隔") {
+                    Stepper("\(settings.refreshIntervalSeconds) 秒",
+                            value: $settings.refreshIntervalSeconds,
+                            in: 15...3600, step: 15)
+                }
+                LabeledContent("低余额阈值") {
+                    Stepper("$\(settings.lowBalanceThresholdUSD, specifier: "%.0f")",
+                            value: $settings.lowBalanceThresholdUSD,
+                            in: 0...1000, step: 1)
+                }
             }
         }
-        .padding(18)
-        .frame(width: 520)
-        .navigationTitle("设置")
+        .formStyle(.grouped)
+        .frame(width: 500)
+        .navigationTitle("APIStatusBar 设置")
         .onAppear {
             accessToken = credentials.accessToken
             lastSavedAccessToken = credentials.accessToken
@@ -141,120 +129,7 @@ struct SettingsView: View {
         }
     }
 
-    private func settingsSection<Content: View>(_ title: String,
-                                                @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(title)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(Theme.metricSecondary)
-            VStack(alignment: .leading, spacing: 10) {
-                content()
-            }
-            .padding(12)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Theme.panelFill,
-                        in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .strokeBorder(Theme.hairline, lineWidth: 0.5)
-            }
-        }
-    }
-
-    private func settingRow<Content: View>(_ label: String,
-                                           @ViewBuilder content: () -> Content) -> some View {
-        HStack(alignment: .center, spacing: 12) {
-            Text(label)
-                .font(.callout)
-                .foregroundStyle(Theme.metricSecondary)
-                .frame(width: 58, alignment: .trailing)
-            content()
-                .frame(maxWidth: .infinity, alignment: .leading)
-        }
-    }
-
-    private func iconButton(_ systemName: String,
-                            help: String,
-                            action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: systemName)
-                .frame(width: 24, height: 24)
-        }
-        .buttonStyle(.borderless)
-        .foregroundStyle(Theme.metricSecondary)
-        .background(Theme.panelFillElevated,
-                    in: RoundedRectangle(cornerRadius: 7, style: .continuous))
-        .help(help)
-    }
-
-    private func intControl(value: Binding<Int>,
-                            range: ClosedRange<Int>,
-                            step: Int,
-                            suffix: String) -> some View {
-        HStack(spacing: 6) {
-            stepButton("minus") {
-                value.wrappedValue = max(range.lowerBound, value.wrappedValue - step)
-            }
-            Text(valueText(value.wrappedValue, suffix: suffix))
-                .font(.callout.weight(.medium))
-                .monospacedDigit()
-                .foregroundStyle(Theme.accentStrong)
-                .frame(width: 104)
-            stepButton("plus") {
-                value.wrappedValue = min(range.upperBound, value.wrappedValue + step)
-            }
-        }
-        .padding(4)
-        .background(Theme.panelFillElevated,
-                    in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .strokeBorder(Theme.hairline, lineWidth: 0.5)
-        }
-    }
-
-    private func doubleControl(value: Binding<Double>,
-                               range: ClosedRange<Double>,
-                               step: Double,
-                               prefix: String) -> some View {
-        HStack(spacing: 6) {
-            stepButton("minus") {
-                value.wrappedValue = max(range.lowerBound, value.wrappedValue - step)
-            }
-            Text("\(prefix)\(value.wrappedValue, specifier: "%.0f")")
-                .font(.callout.weight(.medium))
-                .monospacedDigit()
-                .foregroundStyle(Theme.accentStrong)
-                .frame(width: 104)
-            stepButton("plus") {
-                value.wrappedValue = min(range.upperBound, value.wrappedValue + step)
-            }
-        }
-        .padding(4)
-        .background(Theme.panelFillElevated,
-                    in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .strokeBorder(Theme.hairline, lineWidth: 0.5)
-        }
-    }
-
-    private func stepButton(_ systemName: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: systemName)
-                .font(.caption.weight(.bold))
-                .frame(width: 22, height: 22)
-        }
-        .buttonStyle(.borderless)
-        .foregroundStyle(Theme.metricSecondary)
-        .background(Theme.panelFill,
-                    in: RoundedRectangle(cornerRadius: 6, style: .continuous))
-    }
-
-    private func valueText(_ value: Int, suffix: String) -> String {
-        let formatted = value.formatted()
-        return suffix.isEmpty ? formatted : "\(formatted) \(suffix)"
-    }
+    // MARK: - Subviews
 
     @ViewBuilder
     private var statusInline: some View {
@@ -262,39 +137,16 @@ struct SettingsView: View {
         case .idle, .checking:
             EmptyView()
         case .success(let usd):
-            compactBadge(String(format: "$%.2f", usd),
-                         systemImage: "checkmark.circle.fill",
-                         color: Theme.champagne)
+            Label(String(format: "$%.2f", usd), systemImage: "checkmark.circle.fill")
+                .foregroundStyle(Theme.champagne)
+                .font(.callout)
         case .failure(let msg):
-            compactBadge(shortError(msg),
-                         systemImage: "exclamationmark.triangle.fill",
-                         color: Theme.warning)
+            Label(shortError(msg), systemImage: "exclamationmark.triangle.fill")
+                .foregroundStyle(Theme.warning)
+                .font(.callout)
                 .lineLimit(1)
                 .truncationMode(.tail)
         }
-    }
-
-    @ViewBuilder
-    private var connectionBadge: some View {
-        switch verification {
-        case .checking:
-            compactBadge("检查中", systemImage: "clock", color: Theme.accent)
-        case .success:
-            compactBadge("已验证", systemImage: "checkmark.seal.fill", color: Theme.champagne)
-        case .failure:
-            compactBadge("未连接", systemImage: "exclamationmark.triangle.fill", color: Theme.warning)
-        case .idle:
-            compactBadge("待验证", systemImage: "circle.dotted", color: Theme.accent)
-        }
-    }
-
-    private func compactBadge(_ text: String, systemImage: String, color: Color) -> some View {
-        Label(text, systemImage: systemImage)
-            .font(.caption.weight(.medium))
-            .foregroundStyle(color)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(color.opacity(0.12), in: Capsule())
     }
 
     @ViewBuilder
@@ -302,19 +154,22 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: 4) {
             Label("访问令牌是 个人设置 → 系统访问令牌 → 生成令牌 处的 UUID，不是 `sk-…` 开头的 API Key。",
                   systemImage: "key.fill")
-            Label("令牌只保存在 macOS Keychain；设置页关闭或验证连接时才会保存，不会每次打开弹窗都读取。",
+            Label("令牌只保存在 macOS Keychain；设置页关闭或验证连接时才会保存。",
                   systemImage: "lock.shield")
         }
         .font(.caption)
         .foregroundStyle(.secondary)
-        .padding(.top, 4)
     }
+
+    // MARK: - Computed
 
     private var canVerify: Bool {
         guard URL(string: settings.serverURL)?.host != nil else { return false }
         guard !accessToken.isEmpty else { return false }
         return verification != .checking
     }
+
+    // MARK: - Actions
 
     private func openInBrowser() {
         guard var c = URLComponents(string: settings.serverURL) else { return }

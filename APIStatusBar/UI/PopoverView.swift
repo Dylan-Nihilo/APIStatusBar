@@ -9,7 +9,6 @@ struct PopoverView: View {
     let openSettings: () -> Void
 
     @State private var refreshSpin = false
-    @State private var hoveredProvider: String?
     @State private var heatmapExpanded = false
 
     private var formatter: QuotaFormatter {
@@ -30,24 +29,15 @@ struct PopoverView: View {
     // MARK: - Empty (first-run) state
 
     private var emptyBody: some View {
-        VStack(spacing: 18) {
-            providerGrid
-
-            VStack(spacing: 6) {
-                Text("尚未配置")
-                    .font(.headline)
+        VStack(spacing: 16) {
+            ContentUnavailableView {
+                Label("尚未配置", systemImage: "key.horizontal")
+            } description: {
                 Text("填入 new-api 服务器地址和访问令牌，即可追踪账户余额和各模型用量。")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
+            } actions: {
+                Button("打开设置…") { openSettings() }
+                    .controlSize(.large)
             }
-            .padding(.horizontal, 4)
-
-            Button("打开设置…") { openSettings() }
-                .buttonStyle(.glassProminent)
-                .tint(Theme.accentStrong)
-                .controlSize(.large)
 
             Divider().opacity(0.5)
             HStack {
@@ -59,41 +49,6 @@ struct PopoverView: View {
             }
         }
         .padding(20)
-    }
-
-    private var providerGrid: some View {
-        let providers = [
-            "claude", "openai", "gemini", "deepseek",
-            "qwen", "kimi", "doubao", "zhipu",
-            "minimax", "mistral", "meta", "perplexity",
-        ]
-        return Grid(horizontalSpacing: 10, verticalSpacing: 10) {
-            ForEach(0..<3, id: \.self) { row in
-                GridRow {
-                    ForEach(0..<4, id: \.self) { col in
-                        let name = providers[row * 4 + col]
-                        Image(name)
-                            .resizable()
-                            .renderingMode(.original)
-                            .aspectRatio(contentMode: .fit)
-                            .frame(width: 32, height: 32)
-                            .padding(8)
-                            .background(Theme.panelFill,
-                                        in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                            .overlay {
-                                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                    .strokeBorder(Theme.hairline, lineWidth: 0.5)
-                            }
-                            .scaleEffect(hoveredProvider == name ? 1.04 : 1.0)
-                            .animation(.smooth(duration: 0.18),
-                                       value: hoveredProvider)
-                            .onHover { isHovering in
-                                hoveredProvider = isHovering ? name : nil
-                            }
-                    }
-                }
-            }
-        }
     }
 
     // MARK: - Configured state
@@ -162,11 +117,11 @@ struct PopoverView: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Theme.panelFillElevated,
+        .background(.regularMaterial,
                     in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .strokeBorder(Theme.surfaceBorder, lineWidth: 0.6)
+                .strokeBorder(.white.opacity(0.25), lineWidth: 0.5)
         }
     }
 
@@ -179,11 +134,11 @@ struct PopoverView: View {
             metricColumn("刷新", value: refreshedText)
         }
         .padding(.vertical, 8)
-        .background(Theme.panelFill,
+        .background(.ultraThinMaterial,
                     in: RoundedRectangle(cornerRadius: 9, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 9, style: .continuous)
-                .strokeBorder(Theme.hairline, lineWidth: 0.5)
+                .strokeBorder(.white.opacity(0.25), lineWidth: 0.5)
         }
     }
 
@@ -236,11 +191,11 @@ struct PopoverView: View {
         .padding(.horizontal, 11)
         .padding(.vertical, 10)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Theme.panelFill,
+        .background(.ultraThinMaterial,
                     in: RoundedRectangle(cornerRadius: 9, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 9, style: .continuous)
-                .strokeBorder(Theme.hairline, lineWidth: 0.5)
+                .strokeBorder(.white.opacity(0.25), lineWidth: 0.5)
         }
     }
 
@@ -427,11 +382,11 @@ struct PopoverView: View {
             .keyboardShortcut("q")
         }
         .padding(5)
-        .background(Theme.panelFill,
+        .background(.ultraThinMaterial,
                     in: RoundedRectangle(cornerRadius: 9, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 9, style: .continuous)
-                .strokeBorder(Theme.hairline, lineWidth: 0.5)
+                .strokeBorder(.white.opacity(0.25), lineWidth: 0.5)
         }
     }
 
