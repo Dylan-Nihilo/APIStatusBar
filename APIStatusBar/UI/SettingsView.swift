@@ -106,27 +106,22 @@ struct SettingsView: View {
                 DisclosureGroup("计费与轮询", isExpanded: $showAdvanced) {
                     VStack(spacing: 10) {
                         settingRow("每 $1") {
-                            HStack(spacing: 6) {
-                                TextField("", value: $settings.quotaPerUnit, format: .number)
-                                    .textFieldStyle(.roundedBorder)
-                                    .frame(width: 108)
-                                    .multilineTextAlignment(.trailing)
-                                Stepper("",
-                                        value: $settings.quotaPerUnit,
-                                        in: 1_000...10_000_000,
-                                        step: 50_000)
-                                    .labelsHidden()
-                            }
+                            intControl(value: $settings.quotaPerUnit,
+                                       range: 1_000...10_000_000,
+                                       step: 50_000,
+                                       suffix: "")
                         }
                         settingRow("刷新") {
-                            Stepper("\(settings.refreshIntervalSeconds) 秒",
-                                    value: $settings.refreshIntervalSeconds,
-                                    in: 15...3600, step: 15)
+                            intControl(value: $settings.refreshIntervalSeconds,
+                                       range: 15...3600,
+                                       step: 15,
+                                       suffix: "秒")
                         }
                         settingRow("低余额") {
-                            Stepper("$\(settings.lowBalanceThresholdUSD, specifier: "%.0f")",
-                                    value: $settings.lowBalanceThresholdUSD,
-                                    in: 0...1000, step: 1)
+                            doubleControl(value: $settings.lowBalanceThresholdUSD,
+                                          range: 0...1000,
+                                          step: 1,
+                                          prefix: "$")
                         }
                     }
                     .padding(.top, 8)
@@ -190,6 +185,75 @@ struct SettingsView: View {
         .background(Theme.panelFillElevated,
                     in: RoundedRectangle(cornerRadius: 7, style: .continuous))
         .help(help)
+    }
+
+    private func intControl(value: Binding<Int>,
+                            range: ClosedRange<Int>,
+                            step: Int,
+                            suffix: String) -> some View {
+        HStack(spacing: 6) {
+            stepButton("minus") {
+                value.wrappedValue = max(range.lowerBound, value.wrappedValue - step)
+            }
+            Text(valueText(value.wrappedValue, suffix: suffix))
+                .font(.callout.weight(.medium))
+                .monospacedDigit()
+                .foregroundStyle(Theme.accentStrong)
+                .frame(width: 104)
+            stepButton("plus") {
+                value.wrappedValue = min(range.upperBound, value.wrappedValue + step)
+            }
+        }
+        .padding(4)
+        .background(Theme.panelFillElevated,
+                    in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .strokeBorder(Theme.hairline, lineWidth: 0.5)
+        }
+    }
+
+    private func doubleControl(value: Binding<Double>,
+                               range: ClosedRange<Double>,
+                               step: Double,
+                               prefix: String) -> some View {
+        HStack(spacing: 6) {
+            stepButton("minus") {
+                value.wrappedValue = max(range.lowerBound, value.wrappedValue - step)
+            }
+            Text("\(prefix)\(value.wrappedValue, specifier: "%.0f")")
+                .font(.callout.weight(.medium))
+                .monospacedDigit()
+                .foregroundStyle(Theme.accentStrong)
+                .frame(width: 104)
+            stepButton("plus") {
+                value.wrappedValue = min(range.upperBound, value.wrappedValue + step)
+            }
+        }
+        .padding(4)
+        .background(Theme.panelFillElevated,
+                    in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .strokeBorder(Theme.hairline, lineWidth: 0.5)
+        }
+    }
+
+    private func stepButton(_ systemName: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.caption.weight(.bold))
+                .frame(width: 22, height: 22)
+        }
+        .buttonStyle(.borderless)
+        .foregroundStyle(Theme.metricSecondary)
+        .background(Theme.panelFill,
+                    in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+    }
+
+    private func valueText(_ value: Int, suffix: String) -> String {
+        let formatted = value.formatted()
+        return suffix.isEmpty ? formatted : "\(formatted) \(suffix)"
     }
 
     @ViewBuilder

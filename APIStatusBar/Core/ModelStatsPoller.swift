@@ -83,18 +83,18 @@ final class ModelStatsPoller: ObservableObject {
     @discardableResult
     func aggregate(rows: [QuotaDataRow]) -> [ProviderUsage] {
         // --- per-provider rollup ---
-        var byProvider: [String: (models: Set<String>, quota: Int, count: Int)] = [:]
+        var byProvider: [String: (models: [String: Int], quota: Int, count: Int)] = [:]
         for row in rows {
             guard let provider = ProviderMapping.provider(for: row.modelName) else { continue }
-            var bucket = byProvider[provider] ?? (models: [], quota: 0, count: 0)
-            bucket.models.insert(row.modelName)
+            var bucket = byProvider[provider] ?? (models: [:], quota: 0, count: 0)
+            bucket.models[row.modelName, default: 0] += row.quota
             bucket.quota += row.quota
             bucket.count += row.count
             byProvider[provider] = bucket
         }
         let providers = byProvider
             .map { ProviderUsage(providerAsset: $0.key,
-                                  modelNames: Array($0.value.models).sorted(),
+                                  modelNames: sortedModels($0.value.models),
                                   quotaRaw: $0.value.quota,
                                   requestCount: $0.value.count) }
             .sorted { $0.quotaRaw > $1.quotaRaw }
@@ -132,5 +132,14 @@ final class ModelStatsPoller: ObservableObject {
         self.dailyBuckets = newDailyBuckets
 
         return providers
+    }
+
+    private func sortedModels(_ models: [String: Int]) -> [String] {
+        models
+            .sorted { lhs, rhs in
+                if lhs.value != rhs.value { return lhs.value > rhs.value }
+                return lhs.key < rhs.key
+            }
+            .map(\.key)
     }
 }

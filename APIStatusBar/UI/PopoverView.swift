@@ -132,19 +132,29 @@ struct PopoverView: View {
             }
             Spacer(minLength: 8)
             if let asset = topProviderAsset {
-                Image(asset)
-                    .resizable()
-                    .renderingMode(.original)
-                    .aspectRatio(contentMode: .fit)
-                    .frame(width: 34, height: 34)
-                    .padding(8)
-                    .background(.thinMaterial,
-                                in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .strokeBorder(Theme.surfaceBorder, lineWidth: 0.6)
+                HStack(alignment: .center, spacing: 8) {
+                    VStack(alignment: .trailing, spacing: 2) {
+                        Text(topProviderLabel)
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(Theme.metricSecondary)
+                            .lineLimit(1)
+                        if let model = topModelName {
+                            Text(compactModelName(model))
+                                .font(.caption2)
+                                .foregroundStyle(.tertiary)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                                .frame(maxWidth: 118, alignment: .trailing)
+                                .help(model)
+                        }
                     }
-                    .help("最常用模型 · \(asset.capitalized)")
+                    Image(asset)
+                        .resizable()
+                        .renderingMode(.original)
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 36, height: 36)
+                        .help("最常用模型 · \(asset.capitalized)")
+                }
             }
         }
         .padding(.horizontal, 14)
@@ -437,6 +447,22 @@ struct PopoverView: View {
 
     private var topProviderAsset: String? {
         modelStats.topProviders.first?.providerAsset
+    }
+
+    private var topProviderLabel: String {
+        guard let asset = topProviderAsset else { return "" }
+        return asset.capitalized
+    }
+
+    private var topModelName: String? {
+        modelStats.topProviders.first?.modelNames.first
+    }
+
+    private func compactModelName(_ model: String) -> String {
+        model
+            .replacingOccurrences(of: "claude-", with: "")
+            .replacingOccurrences(of: "gpt-", with: "GPT ")
+            .replacingOccurrences(of: "gemini-", with: "Gemini ")
     }
 
     private var balanceText: String {
