@@ -72,12 +72,12 @@ struct StatusGroup: Decodable {
 }
 
 struct Monitor: Decodable {
-    let id: Int
+    let id: String
     let name: String
     let group: String
     let tag: String
     let models: String
-    let baseURL: String
+    let baseURL: String?
     let priority: Int
 
     private enum CodingKeys: String, CodingKey {

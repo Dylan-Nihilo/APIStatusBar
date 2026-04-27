@@ -111,7 +111,7 @@ final class ProbePoller: ObservableObject {
     /// Fold the status feed into the popover's view model.
     private func apply(_ data: StatusData) {
         let monitors = data.groups.flatMap(\.monitors)
-        guard let primary = monitors.sorted(by: primaryRank).first else {
+        guard let primary = primaryMonitor(in: monitors, heartbeats: data.heartbeatList) else {
             history = []
             snapshot = nil
             primaryChannelName = nil
@@ -119,7 +119,7 @@ final class ProbePoller: ObservableObject {
             return
         }
 
-        let beats = data.heartbeatList[String(primary.id)] ?? []
+        let beats = data.heartbeatList[primary.id] ?? []
         let bars: [Snapshot] = beats.compactMap { beat in
             guard let date = KaizoStatusHelpers.date(from: beat.time) else { return nil }
             return Snapshot(timestamp: date,
@@ -141,10 +141,29 @@ final class ProbePoller: ObservableObject {
         uptime24h = data.uptimeList["\(primary.id)_24"] ?? nil
     }
 
-    /// Sort key: highest priority first, then smallest id.
-    private func primaryRank(_ a: Monitor, _ b: Monitor) -> Bool {
-        if a.priority != b.priority { return a.priority > b.priority }
-        return a.id < b.id
+    /// Pick the channel that best represents what a user can try right now:
+    /// configured priority first, then current UP state, then lower latency.
+    private func primaryMonitor(in monitors: [Monitor],
+                                heartbeats: [String: [Heartbeat]]) -> Monitor? {
+        monitors.max { lhs, rhs in
+            let lhsBeat = heartbeats[lhs.id]?.last
+            let rhsBeat = heartbeats[rhs.id]?.last
+            if lhs.priority != rhs.priority { return lhs.priority < rhs.priority }
+
+            let lhsUp = lhsBeat?.status == 1
+            let rhsUp = rhsBeat?.status == 1
+            if lhsUp != rhsUp { return !lhsUp && rhsUp }
+
+            let lhsHasBeat = lhsBeat != nil
+            let rhsHasBeat = rhsBeat != nil
+            if lhsHasBeat != rhsHasBeat { return !lhsHasBeat && rhsHasBeat }
+
+            let lhsPing = lhsBeat?.ping ?? Int.max
+            let rhsPing = rhsBeat?.ping ?? Int.max
+            if lhsPing != rhsPing { return lhsPing > rhsPing }
+
+            return lhs.name > rhs.name
+        }
     }
 
     /// Per the doc's getOverallStatus rules:
@@ -157,7 +176,7 @@ final class ProbePoller: ObservableObject {
         var allUp = true
         var anyUp = false
         for monitor in monitors {
-            let beats = heartbeats[String(monitor.id)] ?? []
+            let beats = heartbeats[monitor.id] ?? []
             let isUp = beats.last?.status == 1
             if isUp { anyUp = true } else { allUp = false }
         }
