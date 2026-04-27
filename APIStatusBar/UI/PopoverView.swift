@@ -10,7 +10,7 @@ struct PopoverView: View {
 
     @State private var refreshSpin = false
     @State private var hoveredProvider: String?
-    @Environment(\.openWindow) private var openWindow
+    @State private var heatmapExpanded = false
 
     private var formatter: QuotaFormatter {
         QuotaFormatter(quotaPerUnit: settings.quotaPerUnit)
@@ -104,6 +104,7 @@ struct PopoverView: View {
             metricsRow
             probePanel
             topModelsStrip
+            heatmapSection
             actionRow
         }
         .padding(14)
@@ -215,15 +216,11 @@ struct PopoverView: View {
             HStack(spacing: 8) {
                 ProbeStatusDot(color: probe.snapshot?.health.color ?? .gray,
                                 pulsing: probe.snapshot?.health == .healthy)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text("探针")
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
-                    probeStatusText
-                }
-                    .lineLimit(1)
-                    .truncationMode(.middle)
+                Text("探针")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
                 Spacer(minLength: 0)
+                probeStatusText
                 if let error = poller.lastError {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .font(.caption)
@@ -231,6 +228,8 @@ struct PopoverView: View {
                         .help(String(describing: error))
                 }
             }
+            .lineLimit(1)
+            .truncationMode(.middle)
 
             probeChart
         }
@@ -376,6 +375,37 @@ struct PopoverView: View {
         .animation(.smooth(duration: 0.25), value: modelStats.topProviders)
     }
 
+    private var heatmapSection: some View {
+        VStack(spacing: 0) {
+            Button {
+                withAnimation(.smooth(duration: 0.25)) {
+                    heatmapExpanded.toggle()
+                }
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: heatmapExpanded ? "chevron.down" : "chevron.right")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(.tertiary)
+                    Text("90 天用量")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                    Spacer(minLength: 0)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.borderless)
+            .padding(.horizontal, 2)
+
+            if heatmapExpanded {
+                HeatmapView(dailyBuckets: modelStats.dailyBuckets,
+                            today: Date(),
+                            topModel: modelStats.topProviders.first?.modelNames.first)
+                    .padding(.top, 6)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+    }
+
     private var actionRow: some View {
         HStack(spacing: 7) {
             refreshToolbarButton
@@ -383,9 +413,6 @@ struct PopoverView: View {
                 if let url = URL(string: settings.serverURL), url.host != nil {
                     NSWorkspace.shared.open(url)
                 }
-            }
-            toolbarButton("chart.bar.xaxis", help: "用量仪表板") {
-                openWindow(id: "dashboard")
             }
 
             Spacer(minLength: 0)

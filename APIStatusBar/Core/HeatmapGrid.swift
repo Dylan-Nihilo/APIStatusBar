@@ -1,16 +1,18 @@
 import Foundation
 
-/// Date mapping for the dashboard's 5x7 usage heatmap.
-/// Columns are ISO-like weeks, with column 4 holding today's week.
+/// Date mapping for the 13×7 usage heatmap (≈91 days / 13 weeks).
+/// Columns are ISO-like weeks, with column 12 holding today's week.
 /// Rows are Monday through Sunday.
 enum HeatmapGrid {
+    static let columnCount = 13
+
     struct Cell: Equatable, Hashable {
         let column: Int
         let row: Int
     }
 
     static let allCells: [Cell] = (0..<7).flatMap { row in
-        (0..<5).map { column in
+        (0..<columnCount).map { column in
             Cell(column: column, row: row)
         }
     }
@@ -30,7 +32,7 @@ enum HeatmapGrid {
         let column = calendar.dateComponents([.weekOfYear],
                                              from: leftmostMonday,
                                              to: dateWeekStart).weekOfYear ?? 0
-        guard (0..<5).contains(column) else { return nil }
+        guard (0..<columnCount).contains(column) else { return nil }
 
         let weekday = calendar.component(.weekday, from: day)
         let row = (weekday + 5) % 7
@@ -60,7 +62,7 @@ enum HeatmapGrid {
         let todayStart = calendar.startOfDay(for: today)
         let currentWeekStart = calendar.dateInterval(of: .weekOfYear, for: todayStart)?.start ?? todayStart
         return calendar.date(byAdding: .weekOfYear,
-                             value: -4,
+                             value: -(columnCount - 1),
                              to: currentWeekStart) ?? currentWeekStart
     }
 }

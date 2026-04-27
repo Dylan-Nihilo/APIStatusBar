@@ -30,7 +30,7 @@ final class ModelStatsPoller: ObservableObject {
 
     init(client: NewAPIClient,
          intervalSeconds: Int = 300,
-         lookbackDays: Int = 30,
+         lookbackDays: Int = 90,
          quotaPerUnit: Int = 500_000) {
         self.client = client
         self.intervalSeconds = intervalSeconds
@@ -40,14 +40,31 @@ final class ModelStatsPoller: ObservableObject {
 
     /// Pull the latest rows and re-aggregate. Safe to call manually for
     /// instant refresh after a settings change.
+    /// Splits the lookback into 30-day chunks (server enforces a 30-day max per call)
+    /// and fires them in parallel.
     func refresh() async {
         let now = Date()
-        let start = Calendar.current.date(byAdding: .day,
-                                          value: -lookbackDays,
-                                          to: now) ?? now
+        let chunkDays = 30
+        let chunkCount = Int(ceil(Double(lookbackDays) / Double(chunkDays)))
+
         do {
-            let rows = try await client.getDataSelf(start: start, end: now)
-            aggregate(rows: rows)
+            var allRows: [QuotaDataRow] = []
+            // Build windows: [(-90,-60), (-60,-30), (-30,0)] for lookbackDays=90
+            try await withThrowingTaskGroup(of: [QuotaDataRow].self) { group in
+                for i in 0..<chunkCount {
+                    let offsetEnd   = -i * chunkDays
+                    let offsetStart = -(i + 1) * chunkDays
+                    let chunkEnd   = Calendar.current.date(byAdding: .day, value: offsetEnd,   to: now) ?? now
+                    let chunkStart = Calendar.current.date(byAdding: .day, value: offsetStart, to: now) ?? now
+                    group.addTask { [client] in
+                        try await client.getDataSelf(start: chunkStart, end: chunkEnd)
+                    }
+                }
+                for try await rows in group {
+                    allRows += rows
+                }
+            }
+            aggregate(rows: allRows)
             lastError = nil
         } catch {
             lastError = error
