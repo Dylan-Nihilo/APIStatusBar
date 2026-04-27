@@ -4,13 +4,19 @@ import XCTest
 final class KeychainStoreTests: XCTestCase {
     private var service: String!
 
-    override func setUp() {
-        super.setUp()
+    override func setUpWithError() throws {
+        try super.setUpWithError()
+        try XCTSkipUnless(
+            ProcessInfo.processInfo.environment["APISTATUSBAR_RUN_KEYCHAIN_TESTS"] == "1",
+            "Keychain tests touch the user's login keychain; set APISTATUSBAR_RUN_KEYCHAIN_TESTS=1 to run them explicitly."
+        )
         service = "com.dylan.apistatusbar.tests.\(UUID().uuidString)"
     }
 
     override func tearDown() {
-        try? KeychainStore.delete(service: service, account: "default")
+        if let service {
+            try? KeychainStore.delete(service: service, account: "default")
+        }
         super.tearDown()
     }
 
