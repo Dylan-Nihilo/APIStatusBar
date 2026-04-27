@@ -3,15 +3,19 @@ import SwiftUI
 @main
 struct APIStatusBarApp: App {
     @StateObject private var settings = AppSettings.shared
+    @StateObject private var credentials: CredentialStore
     @StateObject private var poller: QuotaPoller
     @StateObject private var modelStats: ModelStatsPoller
     @StateObject private var probe = ProbePoller(intervalSeconds: 30)
 
     init() {
         let settings = AppSettings.shared
-        let token = (try? KeychainStore.readAccessToken()) ?? ""
+        let credentials = CredentialStore()
         let baseURL = URL(string: settings.serverURL) ?? URL(string: "https://invalid.local")!
-        let client = NewAPIClient(baseURL: baseURL, accessToken: token, userID: settings.userID)
+        let client = NewAPIClient(baseURL: baseURL,
+                                  accessToken: credentials.accessToken,
+                                  userID: settings.userID)
+        _credentials = StateObject(wrappedValue: credentials)
         _poller = StateObject(wrappedValue: QuotaPoller(client: client,
                                                           intervalSeconds: settings.refreshIntervalSeconds))
         _modelStats = StateObject(wrappedValue: ModelStatsPoller(client: client,
@@ -39,15 +43,18 @@ struct APIStatusBarApp: App {
         .menuBarExtraStyle(.window)
 
         Settings {
-            SettingsView(settings: settings)
+            SettingsView(settings: settings, credentials: credentials)
                 .onDisappear { rebuildPollerIfNeeded() }
         }
         .windowResizability(.contentSize)
     }
 
     private func rebuildPollerIfNeeded() {
-        let token = (try? KeychainStore.readAccessToken()) ?? ""
-        guard let url = URL(string: settings.serverURL), url.host != nil, settings.isConfigured else {
+        let token = credentials.accessToken
+        guard let url = URL(string: settings.serverURL),
+              url.host != nil,
+              settings.isConfigured,
+              !token.isEmpty else {
             poller.stop()
             modelStats.stop()
             probe.replaceClient(nil)

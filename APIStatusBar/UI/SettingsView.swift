@@ -2,10 +2,12 @@ import SwiftUI
 
 struct SettingsView: View {
     @ObservedObject var settings: AppSettings
+    @ObservedObject var credentials: CredentialStore
     @State private var accessToken: String = ""
     @State private var isTokenRevealed: Bool = false
     @State private var verification: Verification = .idle
     @State private var detection: Detection = .idle
+    @State private var lastSavedAccessToken: String = ""
     @FocusState private var tokenFocused: Bool
 
     enum Verification: Equatable {
@@ -54,8 +56,7 @@ struct SettingsView: View {
                         .textContentType(.password)
                         .autocorrectionDisabled()
                         .frame(minWidth: 200)
-                        .onChange(of: accessToken) { _, newValue in
-                            try? KeychainStore.setAccessToken(newValue)
+                        .onChange(of: accessToken) { _, _ in
                             verification = .idle
                         }
 
@@ -153,7 +154,11 @@ struct SettingsView: View {
         .frame(width: 500, height: 480)
         .navigationTitle("APIStatusBar 设置")
         .onAppear {
-            accessToken = (try? KeychainStore.readAccessToken()) ?? ""
+            accessToken = credentials.accessToken
+            lastSavedAccessToken = credentials.accessToken
+        }
+        .onDisappear {
+            persistAccessTokenIfNeeded()
         }
     }
 
@@ -180,6 +185,8 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: 4) {
             Label("访问令牌是 个人设置 → 系统访问令牌 → 生成令牌 处的 UUID，不是 `sk-…` 开头的 API Key。",
                   systemImage: "key.fill")
+            Label("令牌只保存在 macOS Keychain；设置页关闭或验证连接时才会保存，不会每次打开弹窗都读取。",
+                  systemImage: "lock.shield")
             Label("如果用户 ID 验证失败，点击 **自动检测** 用当前令牌扫描 1–50。",
                   systemImage: "person.crop.circle.badge.questionmark")
         }
@@ -207,6 +214,10 @@ struct SettingsView: View {
 
     private func verifyConnection() async {
         verification = .checking
+        guard persistAccessTokenIfNeeded() else {
+            verification = .failure("令牌保存失败，请允许 Keychain 访问")
+            return
+        }
         guard let url = URL(string: settings.serverURL), url.host != nil else {
             verification = .failure("服务器地址无效")
             return
@@ -235,6 +246,10 @@ struct SettingsView: View {
     private func autoDetectUserID() async {
         guard !accessToken.isEmpty,
               let url = URL(string: settings.serverURL), url.host != nil else { return }
+        guard persistAccessTokenIfNeeded() else {
+            verification = .failure("令牌保存失败，请允许 Keychain 访问")
+            return
+        }
         verification = .idle
         for candidate in 1...50 {
             detection = .scanning(current: candidate)
@@ -251,5 +266,15 @@ struct SettingsView: View {
         }
         detection = .notFound
         verification = .failure("1–50 中未找到匹配 ID，请到 /console/user 查看")
+    }
+
+    @discardableResult
+    private func persistAccessTokenIfNeeded() -> Bool {
+        let trimmed = accessToken.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed != lastSavedAccessToken else { return true }
+        guard credentials.saveAccessToken(trimmed) else { return false }
+        accessToken = trimmed
+        lastSavedAccessToken = trimmed
+        return true
     }
 }
