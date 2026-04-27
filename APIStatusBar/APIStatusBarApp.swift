@@ -14,7 +14,7 @@ struct APIStatusBarApp: App {
         let baseURL = URL(string: settings.serverURL) ?? URL(string: "https://invalid.local")!
         let client = NewAPIClient(baseURL: baseURL,
                                   accessToken: credentials.accessToken,
-                                  userID: settings.userID)
+                                  userID: settings.newAPIUserHeaderID)
         _credentials = StateObject(wrappedValue: credentials)
         _poller = StateObject(wrappedValue: QuotaPoller(client: client,
                                                           intervalSeconds: settings.refreshIntervalSeconds))
@@ -72,7 +72,9 @@ struct APIStatusBarApp: App {
             probe.stop()
             return
         }
-        let client = NewAPIClient(baseURL: url, accessToken: token, userID: settings.userID)
+        let client = NewAPIClient(baseURL: url,
+                                  accessToken: token,
+                                  userID: settings.newAPIUserHeaderID)
         poller.replaceClient(client, intervalSeconds: settings.refreshIntervalSeconds)
         poller.start()
         modelStats.replaceClient(client)

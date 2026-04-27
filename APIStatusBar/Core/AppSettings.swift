@@ -48,9 +48,16 @@ final class AppSettings: ObservableObject {
         self.lowBalanceThresholdUSD = threshold == 0 ? 5.0 : threshold
     }
 
+    /// `userID` is an internal compatibility cache for new-api deployments
+    /// that require the `New-Api-User` header. 0 = unresolved, -1 = no header
+    /// needed, >0 = cached header value.
+    var newAPIUserHeaderID: Int? {
+        userID > 0 ? userID : nil
+    }
+
     /// True if all fields needed for a successful API call are populated.
     var isConfigured: Bool {
         guard let url = URL(string: serverURL), url.host != nil else { return false }
-        return userID > 0
+        return userID != 0
     }
 }

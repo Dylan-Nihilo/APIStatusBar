@@ -45,10 +45,10 @@ private struct EnvelopedResponse<T: Decodable>: Decodable {
 struct NewAPIClient {
     let baseURL: URL
     let accessToken: String
-    let userID: Int
+    let userID: Int?
     let session: URLSession
 
-    init(baseURL: URL, accessToken: String, userID: Int, session: URLSession = .shared) {
+    init(baseURL: URL, accessToken: String, userID: Int? = nil, session: URLSession = .shared) {
         self.baseURL = baseURL
         self.accessToken = accessToken
         self.userID = userID
@@ -83,7 +83,9 @@ struct NewAPIClient {
         var req = URLRequest(url: url)
         req.httpMethod = "GET"
         req.setValue(accessToken, forHTTPHeaderField: "Authorization")
-        req.setValue(String(userID), forHTTPHeaderField: "New-Api-User")
+        if let userID {
+            req.setValue(String(userID), forHTTPHeaderField: "New-Api-User")
+        }
 
         let (data, response) = try await session.data(for: req)
         guard let http = response as? HTTPURLResponse else { throw NewAPIError.httpStatus(-1) }

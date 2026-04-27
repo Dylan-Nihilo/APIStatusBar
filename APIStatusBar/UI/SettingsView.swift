@@ -6,7 +6,6 @@ struct SettingsView: View {
     @State private var accessToken: String = ""
     @State private var isTokenRevealed: Bool = false
     @State private var verification: Verification = .idle
-    @State private var detection: Detection = .idle
     @State private var lastSavedAccessToken: String = ""
     @FocusState private var tokenFocused: Bool
 
@@ -15,13 +14,6 @@ struct SettingsView: View {
         case checking
         case success(remainingUSD: Double)
         case failure(String)
-    }
-
-    enum Detection: Equatable {
-        case idle
-        case scanning(current: Int)
-        case found(Int)
-        case notFound
     }
 
     var body: some View {
@@ -78,21 +70,6 @@ struct SettingsView: View {
                         }
                         .buttonStyle(.borderless)
                         .help("从剪贴板粘贴")
-                    }
-                }
-
-                LabeledContent("用户 ID") {
-                    HStack(spacing: 6) {
-                        TextField("", value: $settings.userID, format: .number)
-                            .textFieldStyle(.roundedBorder)
-                            .frame(width: 80)
-                            .multilineTextAlignment(.trailing)
-                        Stepper("", value: $settings.userID, in: 0...10_000_000)
-                            .labelsHidden()
-                        Button("自动检测") {
-                            Task { await autoDetectUserID() }
-                        }
-                        .disabled(accessToken.isEmpty || isScanning)
                     }
                 }
 
@@ -187,8 +164,6 @@ struct SettingsView: View {
                   systemImage: "key.fill")
             Label("令牌只保存在 macOS Keychain；设置页关闭或验证连接时才会保存，不会每次打开弹窗都读取。",
                   systemImage: "lock.shield")
-            Label("如果用户 ID 验证失败，点击 **自动检测** 用当前令牌扫描 1–50。",
-                  systemImage: "person.crop.circle.badge.questionmark")
         }
         .font(.caption)
         .foregroundStyle(.secondary)
@@ -197,13 +172,8 @@ struct SettingsView: View {
 
     private var canVerify: Bool {
         guard URL(string: settings.serverURL)?.host != nil else { return false }
-        guard !accessToken.isEmpty, settings.userID > 0 else { return false }
+        guard !accessToken.isEmpty else { return false }
         return verification != .checking
-    }
-
-    private var isScanning: Bool {
-        if case .scanning = detection { return true }
-        return false
     }
 
     private func openInBrowser() {
@@ -222,15 +192,14 @@ struct SettingsView: View {
             verification = .failure("服务器地址无效")
             return
         }
-        let client = NewAPIClient(baseURL: url, accessToken: accessToken, userID: settings.userID)
         do {
-            let resp = try await client.getSelf()
+            let resp = try await resolveAccountBinding(url: url)
             let usd = Double(resp.quota) / Double(settings.quotaPerUnit)
             verification = .success(remainingUSD: usd)
         } catch let err as NewAPIError {
             switch err {
             case .httpStatus(401):
-                verification = .failure("HTTP 401 — 用户 ID 可能与此令牌不匹配")
+                verification = .failure("HTTP 401 — 令牌无效或无权限")
             case .httpStatus(let code):
                 verification = .failure("HTTP \(code)")
             case .apiFailure(let msg):
@@ -243,29 +212,42 @@ struct SettingsView: View {
         }
     }
 
-    private func autoDetectUserID() async {
-        guard !accessToken.isEmpty,
-              let url = URL(string: settings.serverURL), url.host != nil else { return }
-        guard persistAccessTokenIfNeeded() else {
-            verification = .failure("令牌保存失败，请允许 Keychain 访问")
-            return
+    private func resolveAccountBinding(url: URL) async throws -> UserSelfResponse {
+        if let userID = settings.newAPIUserHeaderID {
+            do {
+                return try await NewAPIClient(baseURL: url,
+                                             accessToken: accessToken,
+                                             userID: userID).getSelf()
+            } catch let err as NewAPIError {
+                if err == .httpStatus(401) {
+                    settings.userID = 0
+                } else {
+                    throw err
+                }
+            }
         }
-        verification = .idle
+
+        do {
+            let resp = try await NewAPIClient(baseURL: url,
+                                             accessToken: accessToken).getSelf()
+            settings.userID = -1
+            return resp
+        } catch {
+            // Some new-api deployments still require New-Api-User. Keep this
+            // compatibility path hidden from users.
+        }
+
         for candidate in 1...50 {
-            detection = .scanning(current: candidate)
             let client = NewAPIClient(baseURL: url, accessToken: accessToken, userID: candidate)
             do {
-                _ = try await client.getSelf()
-                detection = .found(candidate)
+                let resp = try await client.getSelf()
                 settings.userID = candidate
-                await verifyConnection()
-                return
+                return resp
             } catch {
                 continue
             }
         }
-        detection = .notFound
-        verification = .failure("1–50 中未找到匹配 ID，请到 /console/user 查看")
+        throw NewAPIError.apiFailure("无法自动识别账号，请确认令牌来自当前服务器")
     }
 
     @discardableResult
