@@ -18,7 +18,6 @@ final class QuotaPollerTests: XCTestCase {
         NewAPIClient(
             baseURL: URL(string: "https://api.example.com")!,
             accessToken: "tok",
-            userID: 1,
             session: session
         )
     }

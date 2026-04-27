@@ -29,3 +29,8 @@ APIStatusBar.xcodeproj/
 
 # Tooling scratch
 .lobe-icons-tmp/
+.claude/
+AGENTS.md
+
+# Release artifacts are uploaded to GitHub Releases, not committed.
+dist/

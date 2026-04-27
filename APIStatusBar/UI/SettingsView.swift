@@ -333,7 +333,8 @@ struct SettingsView: View {
             return
         }
         do {
-            let resp = try await resolveAccountBinding(url: url)
+            let resp = try await NewAPIClient(baseURL: url,
+                                             accessToken: accessToken).getSelf()
             let usd = Double(resp.quota) / Double(settings.quotaPerUnit)
             verification = .success(remainingUSD: usd)
         } catch let err as NewAPIError {
@@ -358,44 +359,6 @@ struct SettingsView: View {
         if message.contains("服务器") || message.contains("HTTP") { return "服务器不可用" }
         if message.count > 12 { return "连接失败" }
         return message
-    }
-
-    private func resolveAccountBinding(url: URL) async throws -> UserSelfResponse {
-        if let userID = settings.newAPIUserHeaderID {
-            do {
-                return try await NewAPIClient(baseURL: url,
-                                             accessToken: accessToken,
-                                             userID: userID).getSelf()
-            } catch let err as NewAPIError {
-                if err == .httpStatus(401) {
-                    settings.userID = 0
-                } else {
-                    throw err
-                }
-            }
-        }
-
-        do {
-            let resp = try await NewAPIClient(baseURL: url,
-                                             accessToken: accessToken).getSelf()
-            settings.userID = -1
-            return resp
-        } catch {
-            // Some new-api deployments still require New-Api-User. Keep this
-            // compatibility path hidden from users.
-        }
-
-        for candidate in 1...50 {
-            let client = NewAPIClient(baseURL: url, accessToken: accessToken, userID: candidate)
-            do {
-                let resp = try await client.getSelf()
-                settings.userID = candidate
-                return resp
-            } catch {
-                continue
-            }
-        }
-        throw NewAPIError.apiFailure("无法自动识别账号，请确认令牌来自当前服务器")
     }
 
     @discardableResult

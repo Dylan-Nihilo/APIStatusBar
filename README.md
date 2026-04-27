@@ -29,8 +29,7 @@ In Xcode, ⌘R. The status bar icon appears top-right.
 2. Fill in:
    - **Server URL** — e.g. `https://api.your-host.com`
    - **Access Token** — paste from new-api Web UI
-   - **User ID** — numeric ID shown in Web UI profile
-3. "Save Token"
+3. Click **Verify Connection**
 4. Close Settings — the popover refreshes within ~1s
 
 The label refreshes every 60s by default. Below the low-balance threshold, the label and balance turn red.

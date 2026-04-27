@@ -5,6 +5,7 @@ struct PopoverView: View {
     @ObservedObject var modelStats: ModelStatsPoller
     @ObservedObject var probe: ProbePoller
     @ObservedObject var settings: AppSettings
+    let isConfigured: Bool
     let openSettings: () -> Void
 
     @State private var refreshSpin = false
@@ -17,7 +18,7 @@ struct PopoverView: View {
 
     var body: some View {
         Group {
-            if settings.isConfigured {
+            if isConfigured {
                 configuredBody
             } else {
                 emptyBody

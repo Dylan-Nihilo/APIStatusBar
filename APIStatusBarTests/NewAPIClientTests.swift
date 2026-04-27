@@ -19,7 +19,6 @@ final class NewAPIClientTests: XCTestCase {
         NewAPIClient(
             baseURL: URL(string: "https://api.example.com")!,
             accessToken: "test-token",
-            userID: 42,
             session: session
         )
     }
@@ -40,28 +39,6 @@ final class NewAPIClientTests: XCTestCase {
         XCTAssertEqual(req.url?.path, "/api/user/self")
         XCTAssertEqual(req.httpMethod, "GET")
         XCTAssertEqual(req.value(forHTTPHeaderField: "Authorization"), "test-token")
-        XCTAssertEqual(req.value(forHTTPHeaderField: "New-Api-User"), "42")
-    }
-
-    func test_getSelf_omitsUserHeaderWhenUnresolved() async throws {
-        URLProtocolStub.handler = { _ in
-            let body = """
-            {"success":true,"message":"","data":{"quota":1000000,"used_quota":2500000,"request_count":120}}
-            """.data(using: .utf8)!
-            let response = HTTPURLResponse(url: URL(string: "https://api.example.com/api/user/self")!,
-                                            statusCode: 200, httpVersion: nil, headerFields: nil)!
-            return (response, body)
-        }
-
-        let client = NewAPIClient(
-            baseURL: URL(string: "https://api.example.com")!,
-            accessToken: "test-token",
-            session: session
-        )
-
-        _ = try await client.getSelf()
-
-        let req = try XCTUnwrap(URLProtocolStub.lastRequest)
         XCTAssertNil(req.value(forHTTPHeaderField: "New-Api-User"))
     }
 

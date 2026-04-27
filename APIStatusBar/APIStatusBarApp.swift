@@ -13,8 +13,7 @@ struct APIStatusBarApp: App {
         let credentials = CredentialStore()
         let baseURL = URL(string: settings.serverURL) ?? URL(string: "https://invalid.local")!
         let client = NewAPIClient(baseURL: baseURL,
-                                  accessToken: credentials.accessToken,
-                                  userID: settings.newAPIUserHeaderID)
+                                  accessToken: credentials.accessToken)
         _credentials = StateObject(wrappedValue: credentials)
         _poller = StateObject(wrappedValue: QuotaPoller(client: client,
                                                           intervalSeconds: settings.refreshIntervalSeconds))
@@ -28,6 +27,7 @@ struct APIStatusBarApp: App {
             PopoverHost(poller: poller,
                          modelStats: modelStats,
                          probe: probe,
+                         credentials: credentials,
                          settings: settings,
                          rebuildPoller: rebuildPollerIfNeeded)
         } label: {
@@ -36,7 +36,7 @@ struct APIStatusBarApp: App {
                 formatter: QuotaFormatter(quotaPerUnit: settings.quotaPerUnit),
                 lowBalanceThresholdUSD: settings.lowBalanceThresholdUSD,
                 hasError: poller.lastError != nil,
-                isConfigured: settings.isConfigured,
+                isConfigured: settings.isConfigured && !credentials.accessToken.isEmpty,
                 topProviderAsset: modelStats.topProviders.first?.providerAsset
             )
         }
@@ -73,8 +73,7 @@ struct APIStatusBarApp: App {
             return
         }
         let client = NewAPIClient(baseURL: url,
-                                  accessToken: token,
-                                  userID: settings.newAPIUserHeaderID)
+                                  accessToken: token)
         poller.replaceClient(client, intervalSeconds: settings.refreshIntervalSeconds)
         poller.start()
         modelStats.replaceClient(client)
@@ -89,19 +88,28 @@ private struct PopoverHost: View {
     @ObservedObject var poller: QuotaPoller
     @ObservedObject var modelStats: ModelStatsPoller
     @ObservedObject var probe: ProbePoller
+    @ObservedObject var credentials: CredentialStore
     @ObservedObject var settings: AppSettings
     let rebuildPoller: () -> Void
 
     @Environment(\.openSettings) private var openSettings
 
+    private var isReady: Bool {
+        settings.isConfigured && !credentials.accessToken.isEmpty
+    }
+
     var body: some View {
-        PopoverView(poller: poller, modelStats: modelStats, probe: probe, settings: settings) {
+        PopoverView(poller: poller,
+                    modelStats: modelStats,
+                    probe: probe,
+                    settings: settings,
+                    isConfigured: isReady) {
             NSApp.activate(ignoringOtherApps: true)
             openSettings()
         }
         .onAppear {
             rebuildPoller()
-            if settings.isConfigured {
+            if isReady {
                 if poller.snapshot == nil {
                     Task { await poller.refresh() }
                 }

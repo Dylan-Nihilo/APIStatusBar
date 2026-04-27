@@ -6,7 +6,6 @@ final class ModelStatsPollerTests: XCTestCase {
     private func client() -> NewAPIClient {
         NewAPIClient(baseURL: URL(string: "https://x.local")!,
                      accessToken: "t",
-                     userID: 1,
                      session: URLProtocolStub.session())
     }
 

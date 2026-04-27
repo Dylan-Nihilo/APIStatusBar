@@ -18,13 +18,12 @@ Built for **macOS 26.0 (Tahoe)** with **Liquid Glass** as the primary visual lan
 - Internationalization (English + Chinese hard-coded only)
 - Push notifications (visual indicators only, until proven necessary)
 
-## 3. Backend Surface (new-api, no server changes required)
+## 3. Backend Surface (new-api)
 
-All endpoints are existing in stock new-api. Auth headers for every call:
+Auth header for every call:
 
 ```
 Authorization: <access_token>     # from Web UI → Personal Settings → Generate Access Token
-New-Api-User: <user_id>           # numeric user ID matching the access token
 ```
 
 | Purpose | Method | Path | Notes |
@@ -63,7 +62,6 @@ Compact 320 × 360 view:
 ### 4.4 Settings Window (`Settings` scene)
 - Server URL
 - Access Token (Keychain-backed, never written to UserDefaults)
-- User ID
 - Quota-per-unit (default 500000)
 - Refresh interval (default 60s, min 15s)
 - Low-balance threshold ($, default 5)
