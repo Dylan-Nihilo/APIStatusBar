@@ -7,6 +7,7 @@ struct SettingsView: View {
     @State private var isTokenRevealed: Bool = false
     @State private var verification: Verification = .idle
     @State private var lastSavedAccessToken: String = ""
+    @State private var showAdvanced: Bool = false
     @FocusState private var tokenFocused: Bool
 
     enum Verification: Equatable {
@@ -17,71 +18,76 @@ struct SettingsView: View {
     }
 
     var body: some View {
-        Form {
-            Section("服务器") {
-                LabeledContent("地址") {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .center) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("APIStatusBar")
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(Theme.accentStrong)
+                    Text("new-api 账户监控")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                connectionBadge
+            }
+
+            settingsSection("服务器") {
+                settingRow("地址") {
                     TextField("https://api.your-host.com", text: $settings.serverURL)
                         .textFieldStyle(.roundedBorder)
                         .autocorrectionDisabled()
                         .textContentType(.URL)
-                        .frame(minWidth: 240)
+                        .frame(minWidth: 280)
                 }
 
-                LabeledContent("控制台") {
-                    Button("在浏览器中打开…") { openInBrowser() }
+                settingRow("控制台") {
+                    Button("打开") { openInBrowser() }
                         .disabled(URL(string: settings.serverURL)?.host == nil)
                 }
             }
 
-            Section {
-                LabeledContent("访问令牌") {
+            settingsSection("凭据") {
+                settingRow("令牌") {
                     HStack(spacing: 6) {
                         Group {
                             if isTokenRevealed {
-                                TextField("粘贴 UUID", text: $accessToken)
+                                TextField("粘贴系统访问令牌", text: $accessToken)
                             } else {
-                                SecureField("粘贴 UUID", text: $accessToken)
+                                SecureField("粘贴系统访问令牌", text: $accessToken)
                             }
                         }
                         .focused($tokenFocused)
                         .textFieldStyle(.roundedBorder)
                         .textContentType(.password)
                         .autocorrectionDisabled()
-                        .frame(minWidth: 200)
                         .onChange(of: accessToken) { _, _ in
                             verification = .idle
                         }
 
-                        Button {
+                        iconButton(isTokenRevealed ? "eye.slash" : "eye",
+                                   help: isTokenRevealed ? "隐藏令牌" : "显示令牌") {
                             isTokenRevealed.toggle()
                             tokenFocused = true
-                        } label: {
-                            Image(systemName: isTokenRevealed ? "eye.slash" : "eye")
                         }
-                        .buttonStyle(.borderless)
-                        .help(isTokenRevealed ? "隐藏令牌" : "显示令牌")
 
-                        Button {
+                        iconButton("doc.on.clipboard", help: "从剪贴板粘贴") {
                             if let pasted = NSPasteboard.general.string(forType: .string) {
                                 accessToken = pasted.trimmingCharacters(in: .whitespacesAndNewlines)
                             }
-                        } label: {
-                            Image(systemName: "doc.on.clipboard")
                         }
-                        .buttonStyle(.borderless)
-                        .help("从剪贴板粘贴")
                     }
                 }
 
-                LabeledContent("连接") {
+                settingRow("连接") {
                     HStack(spacing: 8) {
                         Button {
                             Task { await verifyConnection() }
                         } label: {
                             if verification == .checking {
-                                HStack(spacing: 4) {
+                                HStack(spacing: 5) {
                                     ProgressView().controlSize(.mini)
-                                    Text("验证中…")
+                                    Text("验证中")
                                 }
                             } else {
                                 Text("验证连接")
@@ -92,44 +98,45 @@ struct SettingsView: View {
                         statusInline
                     }
                 }
-            } header: {
-                Text("凭据")
-            } footer: {
+
                 helpFooter
             }
 
-            Section("换算") {
-                LabeledContent("每 $1 配额") {
-                    HStack(spacing: 6) {
-                        TextField("", value: $settings.quotaPerUnit, format: .number)
-                            .textFieldStyle(.roundedBorder)
-                            .frame(width: 100)
-                            .multilineTextAlignment(.trailing)
-                        Stepper("",
-                                value: $settings.quotaPerUnit,
-                                in: 1_000...10_000_000,
-                                step: 50_000)
-                            .labelsHidden()
+            settingsSection("高级") {
+                DisclosureGroup("计费与轮询", isExpanded: $showAdvanced) {
+                    VStack(spacing: 10) {
+                        settingRow("每 $1") {
+                            HStack(spacing: 6) {
+                                TextField("", value: $settings.quotaPerUnit, format: .number)
+                                    .textFieldStyle(.roundedBorder)
+                                    .frame(width: 108)
+                                    .multilineTextAlignment(.trailing)
+                                Stepper("",
+                                        value: $settings.quotaPerUnit,
+                                        in: 1_000...10_000_000,
+                                        step: 50_000)
+                                    .labelsHidden()
+                            }
+                        }
+                        settingRow("刷新") {
+                            Stepper("\(settings.refreshIntervalSeconds) 秒",
+                                    value: $settings.refreshIntervalSeconds,
+                                    in: 15...3600, step: 15)
+                        }
+                        settingRow("低余额") {
+                            Stepper("$\(settings.lowBalanceThresholdUSD, specifier: "%.0f")",
+                                    value: $settings.lowBalanceThresholdUSD,
+                                    in: 0...1000, step: 1)
+                        }
                     }
+                    .padding(.top, 8)
                 }
-            }
-
-            Section("轮询") {
-                LabeledContent("刷新间隔") {
-                    Stepper("\(settings.refreshIntervalSeconds) 秒",
-                            value: $settings.refreshIntervalSeconds,
-                            in: 15...3600, step: 15)
-                }
-                LabeledContent("低额度阈值") {
-                    Stepper("$\(settings.lowBalanceThresholdUSD, specifier: "%.0f")",
-                            value: $settings.lowBalanceThresholdUSD,
-                            in: 0...1000, step: 1)
-                }
+                .font(.callout)
             }
         }
-        .formStyle(.grouped)
-        .frame(width: 500, height: 480)
-        .navigationTitle("APIStatusBar 设置")
+        .padding(18)
+        .frame(width: 520)
+        .navigationTitle("设置")
         .onAppear {
             accessToken = credentials.accessToken
             lastSavedAccessToken = credentials.accessToken
@@ -139,22 +146,91 @@ struct SettingsView: View {
         }
     }
 
+    private func settingsSection<Content: View>(_ title: String,
+                                                @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(title)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(Theme.metricSecondary)
+            VStack(alignment: .leading, spacing: 10) {
+                content()
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Theme.panelFill,
+                        in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .strokeBorder(Theme.hairline, lineWidth: 0.5)
+            }
+        }
+    }
+
+    private func settingRow<Content: View>(_ label: String,
+                                           @ViewBuilder content: () -> Content) -> some View {
+        HStack(alignment: .center, spacing: 12) {
+            Text(label)
+                .font(.callout)
+                .foregroundStyle(Theme.metricSecondary)
+                .frame(width: 58, alignment: .trailing)
+            content()
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private func iconButton(_ systemName: String,
+                            help: String,
+                            action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .frame(width: 24, height: 24)
+        }
+        .buttonStyle(.borderless)
+        .foregroundStyle(Theme.metricSecondary)
+        .background(Theme.panelFillElevated,
+                    in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+        .help(help)
+    }
+
     @ViewBuilder
     private var statusInline: some View {
         switch verification {
         case .idle, .checking:
             EmptyView()
         case .success(let usd):
-            Label(String(format: "$%.2f", usd), systemImage: "checkmark.circle.fill")
-                .foregroundStyle(Theme.accent)
-                .font(.callout)
+            compactBadge(String(format: "$%.2f", usd),
+                         systemImage: "checkmark.circle.fill",
+                         color: Theme.champagne)
         case .failure(let msg):
-            Label(msg, systemImage: "exclamationmark.triangle.fill")
-                .foregroundStyle(.red)
-                .font(.callout)
+            compactBadge(shortError(msg),
+                         systemImage: "exclamationmark.triangle.fill",
+                         color: Theme.warning)
                 .lineLimit(1)
                 .truncationMode(.tail)
         }
+    }
+
+    @ViewBuilder
+    private var connectionBadge: some View {
+        switch verification {
+        case .checking:
+            compactBadge("检查中", systemImage: "clock", color: Theme.accent)
+        case .success:
+            compactBadge("已验证", systemImage: "checkmark.seal.fill", color: Theme.champagne)
+        case .failure:
+            compactBadge("未连接", systemImage: "exclamationmark.triangle.fill", color: Theme.warning)
+        case .idle:
+            compactBadge("待验证", systemImage: "circle.dotted", color: Theme.accent)
+        }
+    }
+
+    private func compactBadge(_ text: String, systemImage: String, color: Color) -> some View {
+        Label(text, systemImage: systemImage)
+            .font(.caption.weight(.medium))
+            .foregroundStyle(color)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(color.opacity(0.12), in: Capsule())
     }
 
     @ViewBuilder
@@ -210,6 +286,14 @@ struct SettingsView: View {
         } catch {
             verification = .failure(error.localizedDescription)
         }
+    }
+
+    private func shortError(_ message: String) -> String {
+        if message.contains("401") { return "令牌无效" }
+        if message.contains("响应") || message.contains("decoding") { return "响应异常" }
+        if message.contains("服务器") || message.contains("HTTP") { return "服务器不可用" }
+        if message.count > 12 { return "连接失败" }
+        return message
     }
 
     private func resolveAccountBinding(url: URL) async throws -> UserSelfResponse {

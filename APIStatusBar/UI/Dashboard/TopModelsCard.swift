@@ -30,8 +30,12 @@ struct TopModelsCard: View {
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.regularMaterial,
-                    in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .background(Theme.panelFill,
+                    in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .strokeBorder(Theme.hairline, lineWidth: 0.5)
+        }
         .animation(.spring(response: 0.5), value: topProviders)
     }
 

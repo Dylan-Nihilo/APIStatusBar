@@ -19,8 +19,12 @@ struct AccountCard: View {
         .font(.callout)
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.regularMaterial,
-                    in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .background(Theme.panelFillElevated,
+                    in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .strokeBorder(Theme.surfaceBorder, lineWidth: 0.6)
+        }
     }
 
     private func row(_ label: String, value: String) -> some View {
@@ -30,6 +34,7 @@ struct AccountCard: View {
                 .lineLimit(1)
             Spacer(minLength: 12)
             Text(value)
+                .foregroundStyle(label == "剩余" ? Theme.accentStrong : .primary)
                 .monospacedDigit()
                 .lineLimit(1)
                 .contentTransition(.numericText())

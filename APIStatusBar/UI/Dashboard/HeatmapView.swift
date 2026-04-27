@@ -26,8 +26,12 @@ struct HeatmapView: View {
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.regularMaterial,
-                    in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .background(Theme.panelFill,
+                    in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .strokeBorder(Theme.hairline, lineWidth: 0.5)
+        }
     }
 
     private var weekdayColumn: some View {
@@ -75,8 +79,8 @@ struct HeatmapView: View {
 
     private func fillColor(bucket: Int, isVisible: Bool) -> Color {
         guard isVisible, bucket > 0 else { return Theme.heatmapEmpty }
-        let index = min(bucket, Theme.heatmapAlphas.count - 1)
-        return Theme.accent.opacity(Theme.heatmapAlphas[index])
+        let index = min(bucket, Theme.heatmapLevels.count - 1)
+        return Theme.heatmapLevels[index]
     }
 
     private func tooltip(date: Date, bucket: DayBucket?, isVisible: Bool) -> String {
@@ -99,7 +103,7 @@ struct HeatmapView: View {
                 .foregroundStyle(.tertiary)
             ForEach(1..<5, id: \.self) { level in
                 RoundedRectangle(cornerRadius: 2, style: .continuous)
-                    .fill(Theme.accent.opacity(Theme.heatmapAlphas[level]))
+                    .fill(Theme.heatmapLevels[level])
                     .frame(width: 10, height: 10)
             }
             Text("多")

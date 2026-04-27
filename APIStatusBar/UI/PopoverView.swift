@@ -23,7 +23,7 @@ struct PopoverView: View {
                 emptyBody
             }
         }
-        .frame(width: 320)
+        .frame(width: 336)
     }
 
     // MARK: - Empty (first-run) state
@@ -45,7 +45,7 @@ struct PopoverView: View {
 
             Button("打开设置…") { openSettings() }
                 .buttonStyle(.glassProminent)
-                .tint(Theme.accent)
+                .tint(Theme.accentStrong)
                 .controlSize(.large)
 
             Divider().opacity(0.5)
@@ -77,10 +77,14 @@ struct PopoverView: View {
                             .aspectRatio(contentMode: .fit)
                             .frame(width: 32, height: 32)
                             .padding(8)
-                            .background(.regularMaterial,
-                                        in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                            .scaleEffect(hoveredProvider == name ? 1.08 : 1.0)
-                            .animation(.spring(response: 0.32, dampingFraction: 0.7),
+                            .background(Theme.panelFill,
+                                        in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                    .strokeBorder(Theme.hairline, lineWidth: 0.5)
+                            }
+                            .scaleEffect(hoveredProvider == name ? 1.04 : 1.0)
+                            .animation(.smooth(duration: 0.18),
                                        value: hoveredProvider)
                             .onHover { isHovering in
                                 hoveredProvider = isHovering ? name : nil
@@ -94,32 +98,35 @@ struct PopoverView: View {
     // MARK: - Configured state
 
     private var configuredBody: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            balanceBlock
-            statsBlock
+        VStack(alignment: .leading, spacing: 12) {
+            accountHeader
+            metricsRow
+            probePanel
             topModelsStrip
             actionRow
         }
-        .padding(16)
+        .padding(14)
     }
 
-    private var balanceBlock: some View {
+    private var accountHeader: some View {
         HStack(alignment: .center, spacing: 12) {
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 6) {
-                    Text("剩余额度")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 5) {
+                HStack(spacing: 7) {
+                    Text("余额")
+                        .font(.caption2.weight(.medium))
+                        .foregroundStyle(Theme.metricSecondary)
                     if poller.isRefreshing {
-                        ProgressView().controlSize(.mini)
+                        ProgressView()
+                            .controlSize(.mini)
+                            .tint(Theme.accent)
                     }
                 }
                 Text(balanceText)
-                    .font(.system(size: 32, weight: .semibold, design: .rounded))
+                    .font(.system(size: 30, weight: .semibold, design: .default))
                     .monospacedDigit()
                     .minimumScaleFactor(0.6)
                     .lineLimit(1)
-                    .foregroundStyle(isLow ? Theme.warning : .primary)
+                    .foregroundStyle(isLow ? Theme.warning : Theme.accentStrong)
                     .contentTransition(.numericText())
                     .animation(.snappy, value: balanceText)
             }
@@ -129,79 +136,118 @@ struct PopoverView: View {
                     .resizable()
                     .renderingMode(.original)
                     .aspectRatio(contentMode: .fit)
-                    .frame(width: 44, height: 44)
+                    .frame(width: 34, height: 34)
+                    .padding(8)
+                    .background(.thinMaterial,
+                                in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .strokeBorder(Theme.surfaceBorder, lineWidth: 0.6)
+                    }
                     .help("最常用模型 · \(asset.capitalized)")
             }
         }
-        .padding(14)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-    }
-
-    private var statsBlock: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            statRow("已用", value: usedText)
-            statRow("请求次数", value: requestText)
-            statRow("上次刷新", value: refreshedText)
-            if let error = poller.lastError {
-                Label(String(describing: error), systemImage: "exclamationmark.triangle")
-                    .font(.caption)
-                    .foregroundStyle(Theme.warning)
-                    .lineLimit(2)
-                    .truncationMode(.tail)
-            }
-            Divider().opacity(0.4)
-            probeRow
+        .background(Theme.panelFillElevated,
+                    in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .strokeBorder(Theme.surfaceBorder, lineWidth: 0.6)
         }
-        .font(.callout)
-        .padding(14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 
-    private func statRow(_ label: String, value: String) -> some View {
-        HStack {
+    private var metricsRow: some View {
+        HStack(spacing: 0) {
+            metricColumn("已用", value: usedText)
+            metricDivider
+            metricColumn("请求", value: requestText)
+            metricDivider
+            metricColumn("刷新", value: refreshedText)
+        }
+        .padding(.vertical, 8)
+        .background(Theme.panelFill,
+                    in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                .strokeBorder(Theme.hairline, lineWidth: 0.5)
+        }
+    }
+
+    private func metricColumn(_ label: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
             Text(label)
-                .foregroundStyle(.secondary)
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
                 .lineLimit(1)
-            Spacer(minLength: 12)
             Text(value)
+                .font(.callout.weight(.medium))
                 .monospacedDigit()
                 .lineLimit(1)
+                .minimumScaleFactor(0.72)
+                .foregroundStyle(Theme.accentStrong)
         }
-        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    /// Live probe block: header row (status dot + label + current latency)
-    /// stacked above a 30-minute time-series bar chart. Bar height = latency,
-    /// color = health. Currently fed by mocked data.
-    private var probeRow: some View {
-        VStack(alignment: .leading, spacing: 6) {
+    private var metricDivider: some View {
+        Rectangle()
+            .fill(Theme.hairline)
+            .frame(width: 0.5, height: 28)
+    }
+
+    /// Live probe strip: status, channel summary and 30-minute bar chart.
+    private var probePanel: some View {
+        VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
                 ProbeStatusDot(color: probe.snapshot?.health.color ?? .gray,
                                 pulsing: probe.snapshot?.health == .healthy)
-                probeStatusText
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("探针")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                    probeStatusText
+                }
                     .lineLimit(1)
                     .truncationMode(.middle)
                 Spacer(minLength: 0)
+                if let error = poller.lastError {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.caption)
+                        .foregroundStyle(Theme.warning)
+                        .help(String(describing: error))
+                }
             }
 
             probeChart
         }
+        .padding(.horizontal, 11)
+        .padding(.vertical, 10)
         .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.panelFill,
+                    in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                .strokeBorder(Theme.hairline, lineWidth: 0.5)
+        }
     }
 
     @ViewBuilder
     private var probeStatusText: some View {
         if let s = probe.snapshot {
             Text(probeStatusString(s))
-                .foregroundStyle(.secondary)
+                .font(.caption.weight(.medium))
+                .foregroundStyle(Theme.metricSecondary)
                 .monospacedDigit()
         } else if probe.lastError != nil {
             Text("探针不可用")
+                .font(.caption.weight(.medium))
                 .foregroundStyle(.tertiary)
         } else {
             Text("等待探测")
+                .font(.caption.weight(.medium))
                 .foregroundStyle(.tertiary)
         }
     }
@@ -288,7 +334,7 @@ struct PopoverView: View {
     private var topModelsStrip: some View {
         let top = Array(modelStats.topProviders.prefix(5))
         return HStack(alignment: .center, spacing: 8) {
-            Text("常用模型")
+            Text("常用")
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
                 .lineLimit(1)
@@ -304,85 +350,87 @@ struct PopoverView: View {
                         .resizable()
                         .renderingMode(.original)
                         .aspectRatio(contentMode: .fit)
-                        .frame(width: iconSize(for: provider, top: top),
-                               height: iconSize(for: provider, top: top))
+                        .frame(width: 17, height: 17)
+                        .padding(4)
+                        .background(.thinMaterial, in: Circle())
                         .help("\(provider.providerAsset.capitalized) — \(provider.requestCount) 次调用")
-                        .transition(.scale.combined(with: .opacity))
+                        .transition(.opacity.combined(with: .scale(scale: 0.92)))
                 }
             }
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, 4)
+        .padding(.horizontal, 6)
+        .padding(.vertical, 2)
         .frame(maxWidth: .infinity)
-        .animation(.smooth(duration: 0.4), value: modelStats.topProviders)
-    }
-
-    private func iconSize(for p: ProviderUsage, top: [ProviderUsage]) -> CGFloat {
-        guard top.count > 1, let max = top.first?.quotaRaw, max > 0 else { return 18 }
-        let ratio = CGFloat(p.quotaRaw) / CGFloat(max)
-        return 14 + ratio * 8
+        .animation(.smooth(duration: 0.25), value: modelStats.topProviders)
     }
 
     private var actionRow: some View {
-        GlassEffectContainer(spacing: 8) {
-            HStack(spacing: 8) {
-                Button {
-                    refreshSpin.toggle()
-                    Task {
-                        await poller.refresh()
-                        await modelStats.refresh()
-                        await probe.refresh()
-                    }
-                } label: {
-                    Image(systemName: "arrow.clockwise")
-                        .rotationEffect(.degrees(refreshSpin ? 360 : 0))
-                        .animation(.easeOut(duration: 0.6), value: refreshSpin)
+        HStack(spacing: 7) {
+            refreshToolbarButton
+            toolbarButton("safari", help: "打开 Web 控制台") {
+                if let url = URL(string: settings.serverURL), url.host != nil {
+                    NSWorkspace.shared.open(url)
                 }
-                .keyboardShortcut("r")
-                .buttonStyle(.glassProminent)
-                .tint(Theme.accent)
-                .help("立即刷新")
-
-                Button {
-                    if let url = URL(string: settings.serverURL), url.host != nil {
-                        NSWorkspace.shared.open(url)
-                    }
-                } label: {
-                    Image(systemName: "safari")
-                }
-                .buttonStyle(.glass)
-                .help("打开 Web 控制台")
-
-                Button {
-                    openWindow(id: "dashboard")
-                } label: {
-                    Image(systemName: "chart.bar.xaxis")
-                }
-                .buttonStyle(.glass)
-                .help("用量仪表板")
-
-                Spacer()
-
-                Button {
-                    openSettings()
-                } label: {
-                    Image(systemName: "gearshape")
-                }
-                .keyboardShortcut(",")
-                .buttonStyle(.glass)
-                .help("设置")
-
-                Button {
-                    NSApp.terminate(nil)
-                } label: {
-                    Image(systemName: "power")
-                }
-                .keyboardShortcut("q")
-                .buttonStyle(.glass)
-                .help("退出")
             }
-            .controlSize(.small)
+            toolbarButton("chart.bar.xaxis", help: "用量仪表板") {
+                openWindow(id: "dashboard")
+            }
+
+            Spacer(minLength: 0)
+
+            toolbarButton("gearshape", help: "设置") {
+                openSettings()
+            }
+            .keyboardShortcut(",")
+            toolbarButton("power", help: "退出") {
+                NSApp.terminate(nil)
+            }
+            .keyboardShortcut("q")
         }
+        .padding(5)
+        .background(Theme.panelFill,
+                    in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                .strokeBorder(Theme.hairline, lineWidth: 0.5)
+        }
+    }
+
+    private var refreshToolbarButton: some View {
+        Button {
+            refreshSpin.toggle()
+            Task {
+                await poller.refresh()
+                await modelStats.refresh()
+                await probe.refresh()
+            }
+        } label: {
+            Image(systemName: "arrow.clockwise")
+                .frame(width: 23, height: 23)
+                .rotationEffect(.degrees(refreshSpin ? 360 : 0))
+                .animation(.easeOut(duration: 0.42), value: refreshSpin)
+        }
+        .keyboardShortcut("r")
+        .buttonStyle(.borderless)
+        .foregroundStyle(Theme.accentStrong)
+        .background(Theme.accentMuted.opacity(0.38),
+                    in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+        .help("立即刷新")
+    }
+
+    private func toolbarButton(_ systemName: String,
+                               help: String,
+                               action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .frame(width: 23, height: 23)
+        }
+        .buttonStyle(.borderless)
+        .foregroundStyle(Theme.metricSecondary)
+        .background(Color.clear,
+                    in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+        .help(help)
     }
 
     // MARK: - Computed
