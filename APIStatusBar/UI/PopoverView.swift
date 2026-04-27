@@ -9,6 +9,7 @@ struct PopoverView: View {
 
     @State private var refreshSpin = false
     @State private var hoveredProvider: String?
+    @Environment(\.openWindow) private var openWindow
 
     private var formatter: QuotaFormatter {
         QuotaFormatter(quotaPerUnit: settings.quotaPerUnit)
@@ -351,6 +352,14 @@ struct PopoverView: View {
                 }
                 .buttonStyle(.glass)
                 .help("打开 Web 控制台")
+
+                Button {
+                    openWindow(id: "dashboard")
+                } label: {
+                    Image(systemName: "chart.bar.xaxis")
+                }
+                .buttonStyle(.glass)
+                .help("用量仪表板")
 
                 Spacer()
 

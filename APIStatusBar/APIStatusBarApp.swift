@@ -47,6 +47,17 @@ struct APIStatusBarApp: App {
                 .onDisappear { rebuildPollerIfNeeded() }
         }
         .windowResizability(.contentSize)
+
+        WindowGroup(id: "dashboard") {
+            DashboardView(poller: poller,
+                          modelStats: modelStats,
+                          settings: settings)
+        }
+        .windowResizability(.contentSize)
+        .defaultSize(width: 480, height: 380)
+        .commands {
+            CommandGroup(replacing: .newItem) { }
+        }
     }
 
     private func rebuildPollerIfNeeded() {
