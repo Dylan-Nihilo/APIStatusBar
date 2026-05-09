@@ -224,4 +224,4 @@ APIStatusBar/
 - Account "账户 N 天" deferred — needs `created_at` from `/api/user/self`. Mark as TODO in code with comment, unhide once backend exposes
 - Heatmap bucket thresholds (`[$0.01, $1, $5, $20]`) are guesses for personal usage scale — might need adjustment after a week of real data
 - Top Models v0.2: clicking a row could deep-link to `${serverURL}/console/log?model=...`. Out of scope for v0.1
-- Top Channels card revisit when backend or Kaizo status feed exposes per-channel quota (not just heartbeat status)
+- Top Channels card revisit when backend or New API status feed exposes per-channel quota (not just heartbeat status)

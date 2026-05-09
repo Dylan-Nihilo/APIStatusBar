@@ -52,7 +52,7 @@ final class ProbePollerTests: XCTestCase {
         }
 
         let poller = ProbePoller(intervalSeconds: 30)
-        let client = KaizoStatusClient(baseURL: URL(string: "https://status.example.com")!,
+        let client = StatusFeedClient(baseURL: URL(string: "https://status.example.com")!,
                                        session: URLProtocolStub.session())
         poller.replaceClient(client)
         await poller.refresh()

@@ -2,7 +2,7 @@ import Foundation
 import SwiftUI
 import Combine
 
-/// Periodic health probe driven by `KaizoStatusClient`. With a client wired,
+/// Periodic health probe driven by `StatusFeedClient`. With a client wired,
 /// fetches `/status/status.json` every 5 minutes and surfaces:
 /// - the primary channel's heartbeat history (for the bar chart),
 /// - the OVERALL health across all channels (for the header status dot),
@@ -51,7 +51,7 @@ final class ProbePoller: ObservableObject {
     @Published private(set) var lastError: Error?
 
     let maxHistory: Int
-    private var statusClient: KaizoStatusClient?
+    private var statusClient: StatusFeedClient?
     private let intervalSeconds: Int
     private var loop: Task<Void, Never>?
 
@@ -94,7 +94,7 @@ final class ProbePoller: ObservableObject {
 
     /// Pass nil to clear all state and stop polling. Pass a client to start
     /// fetching real data; caller must `start()` afterwards.
-    func replaceClient(_ client: KaizoStatusClient?) {
+    func replaceClient(_ client: StatusFeedClient?) {
         stop()
         statusClient = client
         if client == nil {
@@ -121,7 +121,7 @@ final class ProbePoller: ObservableObject {
 
         let beats = data.heartbeatList[primary.id] ?? []
         let bars: [Snapshot] = beats.compactMap { beat in
-            guard let date = KaizoStatusHelpers.date(from: beat.time) else { return nil }
+            guard let date = StatusFeedHelpers.date(from: beat.time) else { return nil }
             return Snapshot(timestamp: date,
                              health: Self.health(for: beat),
                              latencyMS: beat.ping)
@@ -132,7 +132,7 @@ final class ProbePoller: ObservableObject {
                                                 heartbeats: data.heartbeatList)
         let latestPrimary = beats.last
         snapshot = Snapshot(
-            timestamp: latestPrimary.flatMap { KaizoStatusHelpers.date(from: $0.time) } ?? Date(),
+            timestamp: latestPrimary.flatMap { StatusFeedHelpers.date(from: $0.time) } ?? Date(),
             health: overallHealth,
             latencyMS: latestPrimary?.ping ?? 0
         )

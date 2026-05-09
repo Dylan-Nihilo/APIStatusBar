@@ -67,7 +67,7 @@ struct SettingsView: View {
                 VStack(alignment: .leading, spacing: 3) {
                     Text("APIStatusBar")
                         .font(.headline.weight(.semibold))
-                    Text("Kaizo")
+                    Text("New API")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -88,7 +88,7 @@ struct SettingsView: View {
     private var connectionCard: some View {
         SettingsCard(title: "服务器", systemImage: "network") {
             settingsRow("地址") {
-                TextField("https://www.kaizo.top", text: $settings.serverURL)
+                TextField("https://newapi.example.com", text: $settings.serverURL)
                     .textFieldStyle(.roundedBorder)
                     .autocorrectionDisabled()
                     .textContentType(.URL)

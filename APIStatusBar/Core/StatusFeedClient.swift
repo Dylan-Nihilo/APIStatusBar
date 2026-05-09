@@ -1,10 +1,9 @@
 import Foundation
 
-/// Public, unauthenticated status feed exposed by some new-api deployments
-/// (e.g. kaizo.top) at `/status/status.json`. See `kaizo-status-api-doc.md`
-/// for the full schema. Refresh frequency on the backend is 5 minutes;
+/// Public, unauthenticated status feed exposed by New API deployments at
+/// `/status/status.json`. Refresh frequency on the backend is 5 minutes;
 /// heartbeats span up to ~24h (288 entries × 5min).
-struct KaizoStatusClient {
+struct StatusFeedClient {
     let baseURL: URL
     let session: URLSession
 
@@ -95,7 +94,7 @@ struct Heartbeat: Decodable {
 
 // MARK: - Helpers
 
-enum KaizoStatusHelpers {
+enum StatusFeedHelpers {
     /// Backend timestamps are Asia/Shanghai. Cache the formatter — DateFormatter
     /// allocations are expensive when iterating 288 heartbeats × N channels.
     static let beatTimeFormatter: DateFormatter = {

@@ -202,7 +202,7 @@ struct PopoverView: View {
         guard let channel = probe.primaryChannelName else {
             return s.health.label
         }
-        var parts: [String] = [channel]
+        var parts: [String] = [stripGatewayPrefix(from: channel)]
         parts.append(s.health == .down ? s.health.label : "\(s.latencyMS) ms")
         if let up = probe.uptime24h {
             parts.append(String(format: "%.1f%%", up * 100))
@@ -453,12 +453,20 @@ struct PopoverView: View {
     }
 
     private func displayModelName(_ model: String) -> String {
-        model
-            .replacingOccurrences(of: "kaizo_max_", with: "")
+        stripGatewayPrefix(from: model)
             .replacingOccurrences(of: "claude-", with: "")
             .replacingOccurrences(of: "gpt-", with: "GPT ")
             .replacingOccurrences(of: "gemini-", with: "Gemini ")
             .replacingOccurrences(of: "_", with: " ")
+    }
+
+    private func stripGatewayPrefix(from model: String) -> String {
+        let parts = model.split(separator: "_", maxSplits: 2).map(String.init)
+        guard parts.count == 3,
+              ["max", "cc"].contains(parts[1]) else {
+            return model
+        }
+        return parts[2]
     }
 
     private func providerDisplayName(_ asset: String) -> String {

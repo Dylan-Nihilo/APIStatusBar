@@ -103,7 +103,7 @@ struct APIStatusBarApp: App {
         modelStats.replaceClient(client)
         modelStats.start()
         // Probe uses the same baseURL but no auth — public status feed.
-        probe.replaceClient(KaizoStatusClient(baseURL: url))
+        probe.replaceClient(StatusFeedClient(baseURL: url))
         probe.start()
     }
 }
