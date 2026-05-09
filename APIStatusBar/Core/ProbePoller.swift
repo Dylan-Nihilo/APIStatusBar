@@ -20,10 +20,10 @@ final class ProbePoller: ObservableObject {
 
         var color: Color {
             switch self {
-            case .healthy:  return .green
-            case .degraded: return .yellow
-            case .down:     return .red
-            case .unknown:  return .gray
+            case .healthy:  return Theme.heatmapLevels[4]
+            case .degraded: return Theme.heatmapLevels[2]
+            case .down:     return Theme.heatmapLevels[1]
+            case .unknown:  return Theme.heatmapEmpty
             }
         }
 

@@ -169,8 +169,10 @@ struct HeatmapView: View {
         let dateText = formatter.string(from: date)
         guard isVisible else { return "" }
         guard let bucket else { return "\(dateText) · 无用量" }
-        return String(format: "%@ · $%.2f · %d 次请求",
-                      dateText, bucket.usd, bucket.requestCount)
+        return String(format: "%@ · %@ · %d 次请求",
+                      dateText,
+                      QuotaFormatter().displayRMB(rmb: bucket.usd),
+                      bucket.requestCount)
     }
 
     // MARK: - Month label helpers
@@ -227,12 +229,10 @@ private struct HeatmapStats {
 
     init(dailyBuckets: [Date: DayBucket], today: Date, topModel: String?) {
         let buckets = Array(dailyBuckets.values)
-        let totalUSD = buckets.reduce(0.0) { $0 + $1.usd }
+        let totalRMB = buckets.reduce(0.0) { $0 + $1.usd }
         let totalReqs = buckets.reduce(0) { $0 + $1.requestCount }
 
-        totalSpendText = totalUSD >= 1000
-            ? String(format: "$%.1fk", totalUSD / 1000)
-            : String(format: "$%.1f", totalUSD)
+        totalSpendText = QuotaFormatter().displayRMB(rmb: totalRMB)
 
         if totalReqs >= 10_000 {
             totalRequestsText = String(format: "%.1fw", Double(totalReqs) / 10_000)
@@ -250,8 +250,8 @@ private struct HeatmapStats {
             peakDayText = "—"
         }
 
-        let avgDaily = buckets.isEmpty ? 0 : totalUSD / Double(buckets.count)
-        avgDailyText = String(format: "$%.1f", avgDaily)
+        let avgDailyRMB = buckets.isEmpty ? 0 : totalRMB / Double(buckets.count)
+        avgDailyText = QuotaFormatter().displayRMB(rmb: avgDailyRMB)
 
         // Streak calculation
         let cal = Calendar.current

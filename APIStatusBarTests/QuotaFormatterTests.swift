@@ -2,7 +2,7 @@ import XCTest
 @testable import APIStatusBar
 
 final class QuotaFormatterTests: XCTestCase {
-    let f = QuotaFormatter(quotaPerUnit: 500_000)
+    let f = QuotaFormatter()
 
     func test_usdConversion_basic() {
         XCTAssertEqual(f.usd(fromRaw: 500_000), 1.0, accuracy: 1e-9)
@@ -30,5 +30,12 @@ final class QuotaFormatterTests: XCTestCase {
     func test_customQuotaPerUnit() {
         let f2 = QuotaFormatter(quotaPerUnit: 1_000_000)
         XCTAssertEqual(f2.usd(fromRaw: 1_000_000), 1.0, accuracy: 1e-9)
+    }
+
+    func test_rmbConversion_usesGatewayAmountDirectly() {
+        XCTAssertEqual(f.rmb(fromRaw: 500_000), 1.0, accuracy: 1e-9)
+        XCTAssertEqual(f.displayRMB(raw: 500_000), "¥1.00")
+        XCTAssertEqual(f.displayRMB(rmb: 123.4), "¥123")
+        XCTAssertEqual(f.displayRMB(rmb: 12_345), "¥1.2万")
     }
 }

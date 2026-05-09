@@ -12,7 +12,7 @@ struct PopoverView: View {
     @State private var heatmapExpanded = false
 
     private var formatter: QuotaFormatter {
-        QuotaFormatter(quotaPerUnit: settings.quotaPerUnit)
+        QuotaFormatter()
     }
 
     var body: some View {
@@ -66,8 +66,8 @@ struct PopoverView: View {
     }
 
     private var accountHeader: some View {
-        HStack(alignment: .center, spacing: 12) {
-            VStack(alignment: .leading, spacing: 5) {
+        HStack(alignment: .center, spacing: 14) {
+            VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 7) {
                     Text("余额")
                         .font(.caption2.weight(.medium))
@@ -87,35 +87,13 @@ struct PopoverView: View {
                     .contentTransition(.numericText())
                     .animation(.snappy, value: balanceText)
             }
-            Spacer(minLength: 8)
-            if let asset = topProviderAsset {
-                HStack(alignment: .center, spacing: 8) {
-                    VStack(alignment: .trailing, spacing: 2) {
-                        Text(topProviderLabel)
-                            .font(.caption2.weight(.semibold))
-                            .foregroundStyle(Theme.metricSecondary)
-                            .lineLimit(1)
-                        if let model = topModelName {
-                            Text(compactModelName(model))
-                                .font(.caption2)
-                                .foregroundStyle(.tertiary)
-                                .lineLimit(1)
-                                .truncationMode(.middle)
-                                .frame(maxWidth: 118, alignment: .trailing)
-                                .help(model)
-                        }
-                    }
-                    Image(asset)
-                        .resizable()
-                        .renderingMode(.original)
-                        .aspectRatio(contentMode: .fit)
-                        .frame(width: 36, height: 36)
-                        .help("最常用模型 · \(asset.capitalized)")
-                }
+            Spacer(minLength: 12)
+            if let provider = topProvider {
+                topModelSummary(provider)
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(.regularMaterial,
                     in: RoundedRectangle(cornerRadius: 10, style: .continuous))
@@ -169,7 +147,7 @@ struct PopoverView: View {
     private var probePanel: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
-                ProbeStatusDot(color: probe.snapshot?.health.color ?? .gray,
+                ProbeStatusDot(color: probe.snapshot?.health.color ?? Theme.heatmapEmpty,
                                 pulsing: probe.snapshot?.health == .healthy)
                 Text("探针")
                     .font(.caption2)
@@ -270,10 +248,8 @@ struct PopoverView: View {
         .frame(height: 22)
     }
 
-    /// Categorical height: green tops out (healthy ceiling), yellow dips
-    /// halfway (unstable), red collapses to a stub (down). Latency stays in
-    /// the tooltip — the bar's job here is "is the service OK?", read at a
-    /// glance from the chart's silhouette.
+    /// Categorical height carries availability; color stays on the same
+    /// restrained scale as the usage heatmap.
     private func barHeight(for sample: ProbePoller.Snapshot) -> CGFloat {
         switch sample.health {
         case .healthy:  return 18
@@ -297,36 +273,28 @@ struct PopoverView: View {
     /// Standalone bare row of provider icons sized by usage share, sitting
     /// between the stats card and the action footer.
     private var topModelsStrip: some View {
-        let top = Array(modelStats.topProviders.prefix(5))
-        return HStack(alignment: .center, spacing: 8) {
-            Text("常用")
-                .font(.caption2)
+        let top = Array(modelStats.topProviders.prefix(3))
+        return VStack(alignment: .leading, spacing: 7) {
+            Text("常用模型")
+                .font(.caption2.weight(.medium))
                 .foregroundStyle(.tertiary)
-                .lineLimit(1)
-                .fixedSize()
             if top.isEmpty {
                 Text(modelStats.lastError == nil ? "加载中…" : "—")
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
                     .lineLimit(1)
             } else {
-                ForEach(top) { provider in
-                    Image(provider.providerAsset)
-                        .resizable()
-                        .renderingMode(.original)
-                        .aspectRatio(contentMode: .fit)
-                        .frame(width: 17, height: 17)
-                        .padding(4)
-                        .background(.thinMaterial, in: Circle())
-                        .help("\(provider.providerAsset.capitalized) — \(provider.requestCount) 次调用")
-                        .transition(.opacity.combined(with: .scale(scale: 0.92)))
+                HStack(spacing: 7) {
+                    ForEach(top) { provider in
+                        modelChip(provider)
+                    }
+                    Spacer(minLength: 0)
                 }
             }
-            Spacer(minLength: 0)
         }
         .padding(.horizontal, 6)
         .padding(.vertical, 2)
-        .frame(maxWidth: .infinity)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .animation(.smooth(duration: 0.25), value: modelStats.topProviders)
     }
 
@@ -428,34 +396,104 @@ struct PopoverView: View {
 
     // MARK: - Computed
 
-    private var topProviderAsset: String? {
-        modelStats.topProviders.first?.providerAsset
+    private var topProvider: ProviderUsage? {
+        modelStats.topProviders.first
     }
 
-    private var topProviderLabel: String {
-        guard let asset = topProviderAsset else { return "" }
-        return asset.capitalized
+    private func topModelSummary(_ provider: ProviderUsage) -> some View {
+        let model = provider.modelNames.first ?? provider.providerAsset
+        return HStack(alignment: .center, spacing: 8) {
+            providerIcon(provider.providerAsset, size: 30)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(displayModelName(model))
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(Theme.metricSecondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .frame(maxWidth: 116, alignment: .leading)
+                    .help(model)
+                Text("\(providerDisplayName(provider.providerAsset)) · \(providerShareText(provider))")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                    .lineLimit(1)
+            }
+        }
+        .help("\(providerDisplayName(provider.providerAsset)) · \(model)")
     }
 
-    private var topModelName: String? {
-        modelStats.topProviders.first?.modelNames.first
+    private func modelChip(_ provider: ProviderUsage) -> some View {
+        let model = provider.modelNames.first ?? provider.providerAsset
+        return HStack(spacing: 5) {
+            providerIcon(provider.providerAsset, size: 16)
+            Text(displayModelName(model))
+                .font(.caption2.weight(.medium))
+                .foregroundStyle(Theme.metricSecondary)
+                .lineLimit(1)
+                .truncationMode(.middle)
+        }
+        .padding(.horizontal, 7)
+        .padding(.vertical, 5)
+        .frame(width: 88, alignment: .leading)
+        .background(.thinMaterial,
+                    in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                .strokeBorder(Theme.hairline, lineWidth: 0.5)
+        }
+        .help("\(providerDisplayName(provider.providerAsset)) · \(model) · \(provider.requestCount) 次调用")
+        .transition(.opacity.combined(with: .scale(scale: 0.96)))
     }
 
-    private func compactModelName(_ model: String) -> String {
+    private func providerIcon(_ asset: String, size: CGFloat) -> some View {
+        Image(asset)
+            .resizable()
+            .renderingMode(.original)
+            .aspectRatio(contentMode: .fit)
+            .frame(width: size, height: size)
+    }
+
+    private func displayModelName(_ model: String) -> String {
         model
+            .replacingOccurrences(of: "kaizo_max_", with: "")
             .replacingOccurrences(of: "claude-", with: "")
             .replacingOccurrences(of: "gpt-", with: "GPT ")
             .replacingOccurrences(of: "gemini-", with: "Gemini ")
+            .replacingOccurrences(of: "_", with: " ")
+    }
+
+    private func providerDisplayName(_ asset: String) -> String {
+        switch asset {
+        case "openai": return "OpenAI"
+        case "claude": return "Claude"
+        case "gemini": return "Gemini"
+        case "deepseek": return "DeepSeek"
+        case "qwen": return "Qwen"
+        case "doubao": return "Doubao"
+        case "kimi": return "Kimi"
+        case "zhipu": return "Zhipu"
+        case "minimax": return "MiniMax"
+        case "mistral": return "Mistral"
+        case "meta": return "Meta"
+        case "perplexity": return "Perplexity"
+        default: return asset.capitalized
+        }
+    }
+
+    private func providerShareText(_ provider: ProviderUsage) -> String {
+        let total = modelStats.topProviders.reduce(0) { $0 + $1.quotaRaw }
+        guard total > 0 else { return "\(provider.requestCount) 次" }
+        let percent = Double(provider.quotaRaw) / Double(total) * 100
+        return String(format: "%.0f%% · %d 次", percent, provider.requestCount)
     }
 
     private var balanceText: String {
         guard let s = poller.snapshot else { return "—" }
-        return formatter.displayString(usd: formatter.usd(fromRaw: s.quotaRaw))
+        return formatter.displayRMB(raw: s.quotaRaw)
     }
 
     private var usedText: String {
         guard let s = poller.snapshot else { return "—" }
-        return formatter.displayString(usd: formatter.usd(fromRaw: s.usedQuotaRaw))
+        return formatter.displayRMB(raw: s.usedQuotaRaw)
     }
 
     private var requestText: String {
@@ -473,7 +511,7 @@ struct PopoverView: View {
 
     private var isLow: Bool {
         guard let s = poller.snapshot else { return false }
-        return formatter.usd(fromRaw: s.quotaRaw) < settings.lowBalanceThresholdUSD
+        return formatter.rmb(fromRaw: s.quotaRaw) < settings.lowBalanceThresholdRMB
     }
 }
 
