@@ -10,7 +10,7 @@
 
 <p align="center">
   <a href="https://github.com/Dylan-Nihilo/APIStatusBar/releases/latest"><img alt="Release" src="https://img.shields.io/github/v/release/Dylan-Nihilo/APIStatusBar?style=flat-square"></a>
-  <img alt="Platform" src="https://img.shields.io/badge/macOS-26.0%2B-111827?style=flat-square&logo=apple">
+  <img alt="Platform" src="https://img.shields.io/badge/macOS-13.0%2B-111827?style=flat-square&logo=apple">
   <img alt="Swift" src="https://img.shields.io/badge/Swift-5-FA7343?style=flat-square&logo=swift&logoColor=white">
   <img alt="Status" src="https://img.shields.io/badge/status-public%20release-2563eb?style=flat-square">
 </p>
@@ -54,14 +54,14 @@ APIStatusBar 常驻 macOS 菜单栏，把 New API 网关的余额、请求量、
 
 从 GitHub Release 下载压缩包：
 
-- [APIStatusBar v0.3.0](https://github.com/Dylan-Nihilo/APIStatusBar/releases/latest)
-- 直接下载：[APIStatusBar-v0.3.0.zip](https://github.com/Dylan-Nihilo/APIStatusBar/releases/download/v0.3.0/APIStatusBar-v0.3.0.zip)
+- [APIStatusBar v0.3.1](https://github.com/Dylan-Nihilo/APIStatusBar/releases/latest)
+- 直接下载：[APIStatusBar-v0.3.1.zip](https://github.com/Dylan-Nihilo/APIStatusBar/releases/download/v0.3.1/APIStatusBar-v0.3.1.zip)
 
 解压后把 `APIStatusBar.app` 放到 `Applications`。首次启动如果 macOS 拦截，在 System Settings 里允许打开即可。
 
 ## 使用要求
 
-- macOS 26.0 或更新版本
+- macOS 13.0 或更新版本
 - 可访问的 New API 网关
 - 控制台中的系统访问令牌
 

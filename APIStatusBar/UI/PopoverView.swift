@@ -30,11 +30,17 @@ struct PopoverView: View {
 
     private var emptyBody: some View {
         VStack(spacing: 16) {
-            ContentUnavailableView {
-                Label("尚未配置", systemImage: "key.horizontal")
-            } description: {
+            VStack(spacing: 10) {
+                Image(systemName: "key.horizontal")
+                    .font(.system(size: 34, weight: .regular))
+                    .foregroundStyle(.secondary)
+                Text("尚未配置")
+                    .font(.headline)
                 Text("填入 new-api 服务器地址和访问令牌，即可追踪账户余额和各模型用量。")
-            } actions: {
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
                 Button("打开设置…") { openSettings() }
                     .controlSize(.large)
             }
@@ -555,7 +561,7 @@ private struct ProbeStatusDot: View {
         }
         .frame(width: 14, height: 14)
         .onAppear { animate = pulsing }
-        .onChange(of: pulsing) { _, newValue in
+        .onChange(of: pulsing) { newValue in
             animate = newValue
         }
     }

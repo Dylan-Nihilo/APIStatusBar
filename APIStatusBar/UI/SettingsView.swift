@@ -91,8 +91,7 @@ struct SettingsView: View {
                 TextField("https://newapi.example.com", text: $settings.serverURL)
                     .textFieldStyle(.roundedBorder)
                     .autocorrectionDisabled()
-                    .textContentType(.URL)
-                    .onChange(of: settings.serverURL) { _, _ in
+                    .onChange(of: settings.serverURL) { _ in
                         verification = .idle
                     }
             }
@@ -127,7 +126,7 @@ struct SettingsView: View {
                     .textFieldStyle(.roundedBorder)
                     .textContentType(.password)
                     .autocorrectionDisabled()
-                    .onChange(of: accessToken) { _, _ in
+                    .onChange(of: accessToken) { _ in
                         verification = .idle
                     }
 
