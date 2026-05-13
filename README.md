@@ -48,16 +48,18 @@ APIStatusBar 常驻 macOS 菜单栏，把 New API 网关的余额、请求量、
 | 模型 | 使用统一 provider icon + model name 展示常用模型，降低扫读成本 |
 | 热力图 | 展开后查看 90 天花费、请求、活跃天数、峰值日和连续使用天数 |
 | 设置 | 管理服务器地址、系统访问令牌、刷新间隔、低余额阈值和连接验证 |
-| 安全 | 系统访问令牌只写入 macOS Keychain，不落 UserDefaults 明文 |
+| 安全 | 系统访问令牌保存在 macOS Keychain；应用只访问自己保存的这一项 |
 
 ## 下载安装
 
-从 GitHub Release 下载压缩包：
+从 GitHub Release 下载 DMG：
 
-- [APIStatusBar v0.3.1](https://github.com/Dylan-Nihilo/APIStatusBar/releases/latest)
-- 直接下载：[APIStatusBar-v0.3.1.zip](https://github.com/Dylan-Nihilo/APIStatusBar/releases/download/v0.3.1/APIStatusBar-v0.3.1.zip)
+- [APIStatusBar 最新版](https://github.com/Dylan-Nihilo/APIStatusBar/releases/latest)
+- 下载 release asset 里的 `APIStatusBar-v<version>.dmg`
 
-解压后把 `APIStatusBar.app` 放到 `Applications`。首次启动如果 macOS 拦截，在 System Settings 里允许打开即可。
+打开 DMG，把 `APIStatusBar.app` 拖到 `Applications`。首次启动如果 macOS 拦截，在 System Settings 里允许打开即可。
+
+首次启动会自动打开设置窗口，并在 Dock 中显示，方便菜单栏拥挤时也能找到入口。配置完成后应用会切回菜单栏工具形态，不再常驻 Dock；之后从菜单栏图标进入主面板。
 
 ## 使用要求
 
@@ -69,17 +71,20 @@ APIStatusBar 常驻 macOS 菜单栏，把 New API 网关的余额、请求量、
 
 ## 首次配置
 
-1. 启动 `APIStatusBar.app`，点击菜单栏图标进入设置。
+1. 启动 `APIStatusBar.app`，按照自动打开的启动引导填写配置。
 2. 填入服务器地址，例如 `https://newapi.example.com`。
 3. 在 Web 控制台生成系统访问令牌，复制后回到设置页粘贴或读取剪贴板。
 4. 点击“验证连接”。
 5. 验证通过后关闭设置页，菜单栏弹窗会自动刷新余额和状态。
 
+如果菜单栏已有很多图标，APIStatusBar 图标可能被 macOS 挤到不可见区域。重新打开 `APIStatusBar.app` 会回到设置窗口；也可以按住 Command 将菜单栏图标拖到更靠右的位置，应用会让系统记住这个位置。
+
 ## 隐私与安全
 
 - 应用不会读取浏览器 Cookie 或静默接管浏览器登录态。
-- 令牌只保存在 macOS Keychain 中。
-- 设置页卸载凭据或连接验证时才会写入令牌。
+- 令牌保存在 macOS Keychain 中，是为了重启后继续显示余额和用量，不需要用户每次重新粘贴。
+- APIStatusBar 只读取和写入本应用保存的 `accessToken` 条目，不读取系统密码、浏览器密码或其他 Keychain 项目。
+- 设置页粘贴令牌或连接验证时才会写入令牌。
 - 余额、请求和模型数据来自你配置的网关地址。
 
 ## 从源码运行
@@ -94,6 +99,14 @@ open APIStatusBar.xcodeproj
 ```
 
 在 Xcode 里运行 `APIStatusBar` scheme。启动后，菜单栏右侧会出现应用图标。
+
+## 打包 Release DMG
+
+```bash
+scripts/package_dmg.sh
+```
+
+产物会写到 `dist/APIStatusBar-v<version>.dmg`，DMG 内包含 `APIStatusBar.app` 和 `Applications` 快捷方式。
 
 ## 项目结构
 

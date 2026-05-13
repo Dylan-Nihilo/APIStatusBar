@@ -28,6 +28,10 @@ struct SettingsView: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
+                    if needsOnboarding {
+                        onboardingPanel
+                            .transition(.opacity.combined(with: .move(edge: .top)))
+                    }
                     connectionCard
                     credentialCard
                     billingCard
@@ -36,8 +40,8 @@ struct SettingsView: View {
             }
             .background(Color(nsColor: .windowBackgroundColor))
         }
-        .frame(width: 680)
-        .frame(minHeight: 430)
+        .frame(width: 760)
+        .frame(minHeight: 540)
         .navigationTitle("APIStatusBar 设置")
         .onAppear {
             accessToken = credentials.accessToken
@@ -51,6 +55,14 @@ struct SettingsView: View {
     }
 
     // MARK: - Sections
+
+    private var onboardingPanel: some View {
+        OnboardingHeroCard(serverReady: settings.isConfigured,
+                           tokenReady: hasAccessToken,
+                           canOpenConsole: URL(string: settings.serverURL)?.host != nil,
+                           openConsole: openInBrowser,
+                           pasteToken: pasteAccessToken)
+    }
 
     private var sidebar: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -147,6 +159,12 @@ struct SettingsView: View {
                 }
             }
 
+            keychainDisclosure
+
+            if credentials.lastError != nil {
+                keychainWarning
+            }
+
             settingsRow("连接") {
                 HStack(spacing: 10) {
                     Button {
@@ -184,6 +202,36 @@ struct SettingsView: View {
     }
 
     // MARK: - Subviews
+
+    private var keychainDisclosure: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: "lock.shield")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(Theme.metricSecondary)
+                .frame(width: 58, alignment: .trailing)
+
+            Text("为了重启后继续显示余额，APIStatusBar 会把这个系统访问令牌保存到 macOS Keychain。它只访问本应用保存的这一项令牌，不会读取系统密码、浏览器密码或其他钥匙串项目。")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private var keychainWarning: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: "exclamationmark.triangle")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(Theme.warning)
+                .frame(width: 58, alignment: .trailing)
+
+            Text("macOS 暂时拒绝访问本应用的 Keychain 条目。本次运行仍会使用当前令牌；如果重启后丢失，请重新粘贴并验证一次。")
+                .font(.caption)
+                .foregroundStyle(Theme.warning)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
 
     @ViewBuilder
     private var verifyButtonLabel: some View {
@@ -233,8 +281,16 @@ struct SettingsView: View {
 
     private var canVerify: Bool {
         guard URL(string: settings.serverURL)?.host != nil else { return false }
-        guard !accessToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return false }
+        guard hasAccessToken else { return false }
         return verification != .checking
+    }
+
+    private var hasAccessToken: Bool {
+        !accessToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private var needsOnboarding: Bool {
+        !settings.isConfigured || !hasAccessToken
     }
 
     private var sidebarStatusTitle: String {
@@ -295,7 +351,7 @@ struct SettingsView: View {
     private func verifyConnection() async {
         verification = .checking
         guard persistAccessTokenIfNeeded() else {
-            verification = .failure("令牌保存失败，请允许 Keychain 访问")
+            verification = .failure("无法保存令牌")
             return
         }
         onCommit()
@@ -373,6 +429,177 @@ private struct SettingsCard<Content: View>: View {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .strokeBorder(Theme.hairline, lineWidth: 1)
         }
+    }
+}
+
+private struct OnboardingHeroCard: View {
+    let serverReady: Bool
+    let tokenReady: Bool
+    let canOpenConsole: Bool
+    let openConsole: () -> Void
+    let pasteToken: () -> Void
+
+    private var completedCount: Int {
+        [serverReady, tokenReady].filter { $0 }.count
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            HStack(alignment: .top, spacing: 18) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(Theme.accentMuted.opacity(0.42))
+                    AppLogoMark()
+                        .foregroundStyle(Theme.accentStrong)
+                        .frame(width: 34, height: 34)
+                }
+                .frame(width: 58, height: 58)
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Label("启动引导", systemImage: "sparkles")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(Theme.champagne)
+                    Text("把 New API 接入菜单栏")
+                        .font(.system(size: 24, weight: .semibold))
+                        .foregroundStyle(.primary)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text("配置网关地址和系统访问令牌后，余额、探针和模型用量会自动出现在菜单栏弹窗里。")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text("如果还没安装，请先把 APIStatusBar.app 拖到 Applications。")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Spacer(minLength: 12)
+
+                progressBadge
+            }
+
+            VStack(spacing: 0) {
+                OnboardingStepRow(index: 1,
+                                  title: "连接网关",
+                                  detail: "填入 New API 服务器地址，例如 https://newapi.example.com。",
+                                  isComplete: serverReady)
+                Divider().padding(.leading, 34)
+                OnboardingStepRow(index: 2,
+                                  title: "保存系统访问令牌",
+                                  detail: "令牌保存在 macOS Keychain 中，用于重启后恢复；APIStatusBar 只访问自己保存的这一项。",
+                                  isComplete: tokenReady)
+            }
+
+            HStack(spacing: 10) {
+                Button {
+                    pasteToken()
+                } label: {
+                    Label("读取剪贴板", systemImage: "doc.on.clipboard")
+                }
+
+                Button {
+                    openConsole()
+                } label: {
+                    Label("打开控制台", systemImage: "safari")
+                }
+                .disabled(!canOpenConsole)
+
+                Spacer(minLength: 0)
+            }
+
+            HStack(alignment: .top, spacing: 8) {
+                Image(systemName: "menubar.rectangle")
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(Theme.metricSecondary)
+                Text("如果菜单栏空间太紧导致图标被挤掉，重新打开 APIStatusBar 会回到这个窗口；也可以按住 Command 将图标拖到更靠右的位置。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.top, 2)
+        }
+        .padding(18)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background {
+            ZStack(alignment: .topTrailing) {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(.regularMaterial)
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(Theme.panelFillElevated.opacity(0.62))
+                AngularLogoShape()
+                    .stroke(Theme.accentMuted.opacity(0.28),
+                            style: StrokeStyle(lineWidth: 1.2,
+                                               lineCap: .butt,
+                                               lineJoin: .miter))
+                    .frame(width: 190, height: 190)
+                    .rotationEffect(.degrees(12))
+                    .offset(x: 42, y: -64)
+                    .allowsHitTesting(false)
+            }
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .strokeBorder(Theme.surfaceBorder, lineWidth: 1)
+        }
+    }
+
+    private var progressBadge: some View {
+        ZStack {
+            Circle()
+                .stroke(Theme.hairline, lineWidth: 3)
+            Circle()
+                .trim(from: 0, to: CGFloat(completedCount) / 2)
+                .stroke(Theme.champagne,
+                        style: StrokeStyle(lineWidth: 3,
+                                           lineCap: .round))
+                .rotationEffect(.degrees(-90))
+            Text("\(completedCount)/2")
+                .font(.caption.weight(.semibold))
+                .monospacedDigit()
+                .foregroundStyle(Theme.metricSecondary)
+        }
+        .frame(width: 48, height: 48)
+        .accessibilityLabel("配置进度 \(completedCount) / 2")
+    }
+}
+
+private struct OnboardingStepRow: View {
+    let index: Int
+    let title: String
+    let detail: String
+    let isComplete: Bool
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            ZStack {
+                Circle()
+                    .fill(isComplete ? Theme.champagne.opacity(0.16) : Theme.accentMuted.opacity(0.46))
+                if isComplete {
+                    Image(systemName: "checkmark")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(Theme.champagne)
+                } else {
+                    Text("\(index)")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(Theme.metricSecondary)
+                }
+            }
+            .frame(width: 24, height: 24)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(.primary)
+                Text(detail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(.vertical, 10)
     }
 }
 

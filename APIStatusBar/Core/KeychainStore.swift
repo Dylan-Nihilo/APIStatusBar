@@ -1,4 +1,5 @@
 import Foundation
+import LocalAuthentication
 import Security
 
 enum KeychainError: Error {
@@ -7,15 +8,23 @@ enum KeychainError: Error {
 }
 
 enum KeychainStore {
+    private static func applyNonInteractiveAuthentication(to query: inout [String: Any]) {
+        let context = LAContext()
+        context.interactionNotAllowed = true
+        query[kSecUseAuthenticationContext as String] = context
+        query[kSecUseAuthenticationUI as String] = kSecUseAuthenticationUIFail
+    }
+
     /// Store or update a string value. Overwrites if an item with the same service+account exists.
     static func set(_ value: String, service: String, account: String) throws {
         guard let data = value.data(using: .utf8) else { throw KeychainError.unexpectedItemFormat }
 
-        let query: [String: Any] = [
+        var query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: account
         ]
+        applyNonInteractiveAuthentication(to: &query)
 
         let attrs: [String: Any] = [
             kSecValueData as String: data
@@ -28,6 +37,8 @@ enum KeychainStore {
         case errSecItemNotFound:
             var addQuery = query
             addQuery[kSecValueData as String] = data
+            addQuery.removeValue(forKey: kSecUseAuthenticationContext as String)
+            addQuery.removeValue(forKey: kSecUseAuthenticationUI as String)
             let addStatus = SecItemAdd(addQuery as CFDictionary, nil)
             guard addStatus == errSecSuccess else { throw KeychainError.unhandled(addStatus) }
         default:
@@ -37,13 +48,14 @@ enum KeychainStore {
 
     /// Read a string value, or `nil` if not found.
     static func read(service: String, account: String) throws -> String? {
-        let query: [String: Any] = [
+        var query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: account,
             kSecReturnData as String: true,
             kSecMatchLimit as String: kSecMatchLimitOne
         ]
+        applyNonInteractiveAuthentication(to: &query)
 
         var item: CFTypeRef?
         let status = SecItemCopyMatching(query as CFDictionary, &item)
@@ -62,11 +74,12 @@ enum KeychainStore {
 
     /// Delete the item. No-op if absent.
     static func delete(service: String, account: String) throws {
-        let query: [String: Any] = [
+        var query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: account
         ]
+        applyNonInteractiveAuthentication(to: &query)
         let status = SecItemDelete(query as CFDictionary)
         guard status == errSecSuccess || status == errSecItemNotFound else {
             throw KeychainError.unhandled(status)

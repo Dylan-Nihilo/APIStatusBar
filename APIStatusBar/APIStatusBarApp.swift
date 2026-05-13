@@ -5,6 +5,7 @@ import SwiftUI
 @main
 @MainActor
 struct APIStatusBarApp: App {
+    @NSApplicationDelegateAdaptor(AppLifecycleDelegate.self) private var appDelegate
     @StateObject private var settings = AppSettings.shared
     @StateObject private var credentials: CredentialStore
     @StateObject private var poller: QuotaPoller
@@ -15,7 +16,7 @@ struct APIStatusBarApp: App {
 
     init() {
         let settings = AppSettings.shared
-        let credentials = CredentialStore()
+        let credentials = CredentialStore(loadStoredToken: settings.isConfigured)
         let baseURL = URL(string: settings.serverURL) ?? URL(string: "https://invalid.local")!
         let client = NewAPIClient(baseURL: baseURL,
                                   accessToken: credentials.accessToken)
@@ -41,7 +42,14 @@ struct APIStatusBarApp: App {
         let statusItemController = StatusItemController()
         self.statusItemController = statusItemController
         self.settingsWindowController = settingsWindowController
-        NSApp.setActivationPolicy(.accessory)
+        Self.applyActivationPolicy(settings: settings, credentials: credentials)
+        appDelegate.shouldPresentSettingsOnLaunch = {
+            let isReady = settings.isConfigured && !credentials.accessToken.isEmpty
+            return LaunchPresentationPolicy.shouldPresentSettingsOnLaunch(isReady: isReady)
+        }
+        appDelegate.openSettings = {
+            settingsWindowController.show()
+        }
         statusItemController.configure(poller: poller,
                                        modelStats: modelStats,
                                        probe: probe,
@@ -85,6 +93,8 @@ struct APIStatusBarApp: App {
                                               poller: QuotaPoller,
                                               modelStats: ModelStatsPoller,
                                               probe: ProbePoller) {
+        applyActivationPolicy(settings: settings, credentials: credentials)
+
         let token = credentials.accessToken
         guard let url = URL(string: settings.serverURL),
               url.host != nil,
@@ -105,6 +115,35 @@ struct APIStatusBarApp: App {
         // Probe uses the same baseURL but no auth — public status feed.
         probe.replaceClient(StatusFeedClient(baseURL: url))
         probe.start()
+    }
+
+    private static func applyActivationPolicy(settings: AppSettings,
+                                              credentials: CredentialStore) {
+        let isReady = settings.isConfigured && !credentials.accessToken.isEmpty
+        switch LaunchPresentationPolicy.activationMode(isReady: isReady) {
+        case .dock:
+            NSApp.setActivationPolicy(.regular)
+        case .accessory:
+            NSApp.setActivationPolicy(.accessory)
+        }
+    }
+}
+
+@MainActor
+private final class AppLifecycleDelegate: NSObject, NSApplicationDelegate {
+    var shouldPresentSettingsOnLaunch: (() -> Bool)?
+    var openSettings: (() -> Void)?
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        Task { @MainActor [weak self] in
+            guard self?.shouldPresentSettingsOnLaunch?() == true else { return }
+            self?.openSettings?()
+        }
+    }
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        openSettings?()
+        return true
     }
 }
 
@@ -176,8 +215,8 @@ private final class SettingsWindowController: NSObject, NSWindowDelegate {
         window.title = "APIStatusBar 设置"
         window.styleMask = [.titled, .closable, .miniaturizable]
         window.isReleasedWhenClosed = false
-        window.contentMinSize = NSSize(width: 680, height: 430)
-        window.setContentSize(NSSize(width: 680, height: 460))
+        window.contentMinSize = NSSize(width: 760, height: 540)
+        window.setContentSize(NSSize(width: 760, height: 580))
         window.collectionBehavior = [.moveToActiveSpace]
         window.tabbingMode = .disallowed
         window.delegate = self
@@ -192,7 +231,13 @@ private final class SettingsWindowController: NSObject, NSWindowDelegate {
     }
 
     private func present(_ window: NSWindow) {
-        NSApp.setActivationPolicy(.accessory)
+        let isReady = settings.isConfigured && !credentials.accessToken.isEmpty
+        switch LaunchPresentationPolicy.activationMode(isReady: isReady) {
+        case .dock:
+            NSApp.setActivationPolicy(.regular)
+        case .accessory:
+            NSApp.setActivationPolicy(.accessory)
+        }
         NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)
         window.orderFrontRegardless()
@@ -206,9 +251,13 @@ private final class StatusItemController: NSObject {
     private var cancellables = Set<AnyCancellable>()
 
     private weak var poller: QuotaPoller?
+    private weak var modelStats: ModelStatsPoller?
+    private weak var probe: ProbePoller?
     private weak var credentials: CredentialStore?
     private weak var settings: AppSettings?
+    private var rebuildPoller: (() -> Void)?
     private var openSettings: (() -> Void)?
+    private var statusMenu: NSMenu?
 
     func configure(poller: QuotaPoller,
                    modelStats: ModelStatsPoller,
@@ -218,9 +267,13 @@ private final class StatusItemController: NSObject {
                    rebuildPoller: @escaping () -> Void,
                    openSettings: @escaping () -> Void) {
         self.poller = poller
+        self.modelStats = modelStats
+        self.probe = probe
         self.credentials = credentials
         self.settings = settings
+        self.rebuildPoller = rebuildPoller
         self.openSettings = openSettings
+        statusItem.autosaveName = LaunchPresentationPolicy.statusItemAutosaveName
 
         if let button = statusItem.button {
             button.target = self
@@ -267,7 +320,7 @@ private final class StatusItemController: NSObject {
 
     @objc private func togglePopover(_ sender: NSStatusBarButton) {
         if NSApp.currentEvent?.type == .rightMouseUp {
-            openSettings?()
+            showStatusMenu()
             return
         }
 
@@ -280,8 +333,118 @@ private final class StatusItemController: NSObject {
             popover.performClose(sender)
             return
         }
+        showPopover(relativeTo: sender)
+    }
+
+    private func showPopover(relativeTo sender: NSStatusBarButton) {
         popover.show(relativeTo: sender.bounds, of: sender, preferredEdge: .minY)
         popover.contentViewController?.view.window?.makeKey()
+    }
+
+    private func showStatusMenu() {
+        let menu = makeStatusMenu()
+        statusMenu = menu
+        statusItem.menu = menu
+        statusItem.button?.performClick(nil)
+        statusItem.menu = nil
+    }
+
+    private func makeStatusMenu() -> NSMenu {
+        let menu = NSMenu()
+        menu.autoenablesItems = false
+
+        addItem("打开面板", systemImage: "menubar.rectangle", to: menu, action: #selector(openPanelFromMenu))
+        addItem("立即刷新", systemImage: "arrow.clockwise", to: menu, action: #selector(refreshFromMenu)).isEnabled = isConfigured
+        addItem("打开控制台", systemImage: "safari", to: menu, action: #selector(openConsoleFromMenu)).isEnabled = settings?.isConfigured == true
+        menu.addItem(.separator())
+        addItem("设置…", systemImage: "gearshape", to: menu, action: #selector(openSettingsFromMenu))
+        addItem("清除本地配置…", systemImage: "trash", to: menu, action: #selector(clearLocalDataFromMenu))
+        menu.addItem(.separator())
+        addItem("退出 APIStatusBar", systemImage: "power", to: menu, action: #selector(quitFromMenu))
+
+        return menu
+    }
+
+    @discardableResult
+    private func addItem(_ title: String,
+                         systemImage: String,
+                         to menu: NSMenu,
+                         action: Selector) -> NSMenuItem {
+        let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
+        item.target = self
+        item.image = NSImage(systemSymbolName: systemImage, accessibilityDescription: title)
+        menu.addItem(item)
+        return item
+    }
+
+    @objc private func openPanelFromMenu() {
+        guard isConfigured, let button = statusItem.button else {
+            openSettings?()
+            return
+        }
+        showPopover(relativeTo: button)
+    }
+
+    @objc private func refreshFromMenu() {
+        guard isConfigured,
+              let poller,
+              let modelStats,
+              let probe else { return }
+
+        Task {
+            await poller.refresh()
+            await modelStats.refresh()
+            await probe.refresh()
+        }
+    }
+
+    @objc private func openConsoleFromMenu() {
+        guard let settings,
+              var components = URLComponents(string: settings.serverURL),
+              components.host != nil else {
+            openSettings?()
+            return
+        }
+
+        if components.path.isEmpty || components.path == "/" {
+            components.path = "/console/personal"
+        }
+        guard let url = components.url else { return }
+        NSWorkspace.shared.open(url)
+    }
+
+    @objc private func openSettingsFromMenu() {
+        popover.performClose(nil)
+        openSettings?()
+    }
+
+    @objc private func clearLocalDataFromMenu() {
+        let alert = NSAlert()
+        alert.messageText = "清除本地配置？"
+        alert.informativeText = "这会删除服务器地址、轮询设置和本应用保存的访问令牌，不会影响你的 New API 服务器。"
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "清除")
+        alert.addButton(withTitle: "取消")
+
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        clearLocalData()
+    }
+
+    private func clearLocalData() {
+        popover.performClose(nil)
+        poller?.stop()
+        modelStats?.stop()
+        probe?.replaceClient(nil)
+        probe?.stop()
+        _ = credentials?.clearAccessToken()
+        settings?.resetToDefaults()
+        rebuildPoller?()
+        updateStatusItemImage()
+        openSettings?()
+    }
+
+    @objc private func quitFromMenu() {
+        NSApp.terminate(nil)
     }
 
     private func updateStatusItemImage() {

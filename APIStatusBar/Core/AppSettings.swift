@@ -5,6 +5,8 @@ import Combine
 @MainActor
 final class AppSettings: ObservableObject {
     static let shared = AppSettings()
+    static let defaultRefreshIntervalSeconds = 60
+    static let defaultLowBalanceThresholdRMB = 5.0
 
     private let defaults: UserDefaults
 
@@ -34,7 +36,7 @@ final class AppSettings: ObservableObject {
         self.defaults = defaults
         self.serverURL = defaults.string(forKey: Keys.serverURL) ?? ""
         let interval = defaults.integer(forKey: Keys.refreshIntervalSeconds)
-        self.refreshIntervalSeconds = interval == 0 ? 60 : interval
+        self.refreshIntervalSeconds = interval == 0 ? Self.defaultRefreshIntervalSeconds : interval
         let rmbThreshold = defaults.double(forKey: Keys.lowBalanceThresholdRMB)
         let migrationVersion = defaults.integer(forKey: Keys.lowBalanceThresholdMigrationVersion)
         if migrationVersion < 2 {
@@ -43,7 +45,7 @@ final class AppSettings: ObservableObject {
                 self.lowBalanceThresholdRMB = rmbThreshold / legacyWrongMultiplier
             } else {
                 let usdThreshold = defaults.double(forKey: Keys.lowBalanceThresholdUSD)
-                self.lowBalanceThresholdRMB = usdThreshold == 0 ? 5.0 : usdThreshold
+                self.lowBalanceThresholdRMB = usdThreshold == 0 ? Self.defaultLowBalanceThresholdRMB : usdThreshold
             }
             defaults.set(self.lowBalanceThresholdRMB, forKey: Keys.lowBalanceThresholdRMB)
             defaults.set(2, forKey: Keys.lowBalanceThresholdMigrationVersion)
@@ -51,7 +53,7 @@ final class AppSettings: ObservableObject {
             self.lowBalanceThresholdRMB = rmbThreshold
         } else {
             let usdThreshold = defaults.double(forKey: Keys.lowBalanceThresholdUSD)
-            self.lowBalanceThresholdRMB = usdThreshold == 0 ? 5.0 : usdThreshold
+            self.lowBalanceThresholdRMB = usdThreshold == 0 ? Self.defaultLowBalanceThresholdRMB : usdThreshold
         }
     }
 
@@ -59,5 +61,14 @@ final class AppSettings: ObservableObject {
     var isConfigured: Bool {
         guard let url = URL(string: serverURL), url.host != nil else { return false }
         return true
+    }
+
+    func resetToDefaults() {
+        serverURL = ""
+        refreshIntervalSeconds = Self.defaultRefreshIntervalSeconds
+        lowBalanceThresholdRMB = Self.defaultLowBalanceThresholdRMB
+
+        defaults.removeObject(forKey: Keys.lowBalanceThresholdUSD)
+        defaults.set(2, forKey: Keys.lowBalanceThresholdMigrationVersion)
     }
 }

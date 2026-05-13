@@ -20,8 +20,8 @@ targets:
       path: APIStatusBar/Info.plist
       properties:
         LSUIElement: true
-        CFBundleShortVersionString: "0.3.1"
-        CFBundleVersion: "3"
+        CFBundleShortVersionString: "0.3.2"
+        CFBundleVersion: "4"
         NSHumanReadableCopyright: "© 2026 Dylan"
     settings:
       base:
